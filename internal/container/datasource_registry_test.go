@@ -51,3 +51,23 @@ func TestConnectorRegistryIncludesNextcloud(t *testing.T) {
 		t.Fatal("Nextcloud must support resumable full sync with deletion reconciliation")
 	}
 }
+
+func TestDocumentServiceRegistrationDoesNotRequireDeploymentIdentity(t *testing.T) {
+	t.Setenv("IDENTITY_SERVICE_URL", "")
+	t.Setenv("IDENTITY_TOKEN_FILE", "")
+	t.Setenv("IDENTITY_AUDIENCE", "")
+	registry, err := initConnectorRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	connector, err := registry.Get(types.ConnectorTypeDocumentService)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := connector.(datasource.FullStreamingConnector); !ok {
+		t.Fatal("Document Service must preserve its inventory during full sync")
+	}
+	if !datasource.UsesWorkloadIdentity(connector.Type()) {
+		t.Fatal("Document Service authentication must be deployment managed")
+	}
+}

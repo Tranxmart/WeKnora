@@ -66,6 +66,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/datasource"
 	confluenceConnector "github.com/Tencent/WeKnora/internal/datasource/connector/confluence"
 	dingtalkConnector "github.com/Tencent/WeKnora/internal/datasource/connector/dingtalk"
+	documentserviceConnector "github.com/Tencent/WeKnora/internal/datasource/connector/documentservice"
 	"github.com/Tencent/WeKnora/internal/datasource/connector/feishu/core"
 	"github.com/Tencent/WeKnora/internal/datasource/connector/feishu/drive"
 	"github.com/Tencent/WeKnora/internal/datasource/connector/feishu/wiki"
@@ -2141,6 +2142,9 @@ func initConnectorRegistry() (*datasource.ConnectorRegistry, error) {
 	}
 	if err := registry.Register(seafileConnector.NewConnector()); err != nil {
 		errs = errors.Join(errs, fmt.Errorf("register seafile connector: %w", err))
+	}
+	if err := registry.Register(documentserviceConnector.NewConnector()); err != nil {
+		errs = errors.Join(errs, fmt.Errorf("register document service connector: %w", err))
 	}
 	if err := registry.Register(nextcloudConnector.NewConnector()); err != nil {
 		errs = errors.Join(errs, fmt.Errorf("register nextcloud connector: %w", err))

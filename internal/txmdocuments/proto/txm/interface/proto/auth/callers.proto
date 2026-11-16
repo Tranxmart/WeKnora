@@ -1,0 +1,87 @@
+// Copyright 2026 Tranxmart, Inc. All rights reserved.
+
+syntax = "proto3";
+
+package txm.interface.proto.auth.callers;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/Tranxmart/tranxmart/txm/interface/proto/auth/callers";
+
+// The kind of a caller. A caller is exactly one kind; a method serves a set of
+// them (Callers.kinds).
+//
+// The first four kinds are callers with an account, answerable for the call.
+// The fifth, SANDBOX, is not: it is where an agent's work runs, and it is
+// opt-in in both senses — a method serves it only by declaring it, and a
+// service's authentication admits it only by saying so (authnkit
+// Config.AcceptSandbox). The sixth, VEHICLE, has no account either: it is a
+// vehicle on the token identity issued for its certificate, and its subject is
+// the VIN.
+// Next ID: 1
+message CallerKind {
+  // Next ID: 7
+  enum Enum {
+    // Never a caller's kind, and refused in a declaration.
+    UNSPECIFIED = 0;
+    // A person calling as themselves.
+    PERSON = 1;
+    // A delegated agent: an agent acting for a person, on the person's
+    // delegated token. The person is the principal and the agent the actor.
+    DELEGATED_AGENT = 2;
+    // An agent calling as itself, on nobody's behalf — its own account, not a
+    // service. It acts with its own permissions, whoever set it off.
+    AUTONOMOUS_AGENT = 3;
+    // A service calling as itself.
+    SERVICE = 4;
+    // An agent sandbox pod calling on its own ServiceAccount token: an
+    // execution credential, which proves which pod is calling and never who
+    // answers for the call. It has no account and is never decided in the
+    // authorization graph; the method decides from the pod (its run). Only the
+    // Agent Runtime's own entrance serves one. The agent itself calls as
+    // AUTONOMOUS_AGENT, on the token identity-service issues for its run.
+    SANDBOX = 5;
+    // A vehicle calling on the token identity issued for its certificate
+    // (kind vehicle, sub its VIN). It is never an actor. A method served to it
+    // is routed by the vehicle gateway (txm/kubernetes/vehicle_api/routes).
+    VEHICLE = 6;
+  }
+}
+
+// Which KINDS of caller a method serves, declared on the method.
+//
+// Two questions decide a call, and they are different questions. Whether THIS
+// caller holds the permission — a role, a grant — is the authorization layer's,
+// and it is granted and revoked per caller. Whether a caller of this KIND may
+// make this call at all is the method's own: a saved view is a person's
+// question, so no service saves one however it is authorized; a detection's
+// facts are the source's, so no person writes them. That second answer does
+// not change with anybody's permissions, which is why it is declared here,
+// beside the contract, rather than decided in each handler where nothing
+// outside the service can read it.
+//
+// A service that enforces this refuses a method that declares no kind at all,
+// so a method added without deciding is a visible refusal rather than an open
+// door.
+// Next ID: 8
+message Callers {
+  // The kinds were one bool each until a method's set became a list.
+  reserved 1, 2, 3, 5, 6;
+  reserved "person", "agent", "autonomous_agent", "service", "sandbox";
+
+  // The kinds the method serves, each at most once, in the order
+  // CallerKind.Enum lists them. UNSPECIFIED is never one.
+  repeated CallerKind.Enum kinds = 7;
+  // Why the kinds left out are left out, in a sentence a refused caller can
+  // act on. Empty when PERSON, DELEGATED_AGENT, AUTONOMOUS_AGENT and SERVICE
+  // are all served. Leaving SANDBOX or VEHICLE out needs no reason: no method
+  // serves either unless it is built to, so omitting them is the norm, not a
+  // decision.
+  optional string reason = 4;
+}
+
+extend google.protobuf.MethodOptions {
+  // Extension numbers 50000-99999 are for in-house use; this is the first one
+  // this repository declares.
+  optional Callers callers = 50100;
+}

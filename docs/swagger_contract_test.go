@@ -417,3 +417,36 @@ func TestNotificationInboxContract(t *testing.T) {
 		})
 	}
 }
+
+func TestDocumentServiceConnectionContract(t *testing.T) {
+	for _, tt := range swaggerDocuments() {
+		t.Run(tt.name, func(t *testing.T) {
+			var spec struct {
+				Definitions map[string]struct {
+					Required   []string `json:"required" yaml:"required"`
+					Properties map[string]struct {
+						Enum []string `json:"enum" yaml:"enum"`
+					} `json:"properties" yaml:"properties"`
+				} `json:"definitions" yaml:"definitions"`
+			}
+			if err := tt.parse(tt.loadSpec(t), &spec); err != nil {
+				t.Fatal(err)
+			}
+			request := spec.Definitions["internal_handler.ValidateDataSourceConnectionRequest"]
+			if !reflect.DeepEqual(request.Required, []string{"type"}) {
+				t.Fatalf("connection request must allow omitted managed credentials: %v", request.Required)
+			}
+			if _, ok := request.Properties["credentials"]; !ok {
+				t.Fatal("existing connector credential map is missing")
+			}
+			metadata := spec.Definitions["github_com_Tencent_WeKnora_internal_datasource.ConnectorMetadata"]
+			found := false
+			for _, auth := range metadata.Properties["auth_type"].Enum {
+				found = found || auth == "workload_identity"
+			}
+			if !found {
+				t.Fatal("connector metadata must advertise workload_identity authentication")
+			}
+		})
+	}
+}

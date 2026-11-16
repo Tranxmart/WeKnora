@@ -1,0 +1,257 @@
+// Copyright 2026 Tranxmart, Inc. All rights reserved.
+
+syntax = "proto3";
+
+package txm.interface.proto.auth.access;
+
+import "google/protobuf/descriptor.proto";
+import "txm/interface/proto/auth/callers.proto";
+
+option go_package = "github.com/Tranxmart/tranxmart/txm/interface/proto/auth/access";
+
+// A method's access declaration: the whole of what the method's contract says
+// about who may call it and how the call is decided, in one place, on the
+// method. The one exception is the relation it asks on its service's entrance,
+// which a service may state once for all its methods (api_permission_by_group,
+// default_api_permission) and a method then states only where it differs.
+//
+// It answers the questions a service used to answer in one place each:
+//
+//   - which KINDS of caller the method serves (callers, the same message the
+//     callers option carries);
+//   - where the call's authorization is decided (enforcement);
+//   - which operation group it is in (group);
+//   - which gateways forward it (exposure);
+//   - what the service's own entrance asks of a caller on identity-service's
+//     token (api_permission), and what it asks about each object the request
+//     names (checks);
+//   - what the method's handler asks beyond that (handler_permissions).
+//
+// A declaration names things; it decides nothing. Whether THIS caller holds the
+// permission on THIS object is the authorization service's answer, asked by the
+// entrance with the names written here. The permission and the object type are
+// therefore the authorization model's vocabulary, and a CI check holds every
+// declaration to the model (txm/service/core/accesskit). The shared entrances
+// (entrancekit, pepkit.IdentityEntrance) run the same check over the part each
+// reads when they start, so a service whose declarations do not hold does not
+// start.
+//
+// A method with no declaration is refused to every caller.
+// Next ID: 9
+message Access {
+  reserved 3;
+  reserved "entrance";
+
+  // Which kinds of caller the method serves. Declaring no kind serves nobody.
+  optional txm.interface.proto.auth.callers.Callers callers = 1;
+  // Where authorization is decided. Unknown is refused.
+  optional Enforcement.Enum enforcement = 2;
+  // The operation group the method is in. Unknown is refused.
+  optional OperationGroup.Enum group = 4;
+  // Which gateways forward the method. Absent is internal only.
+  optional Exposure exposure = 5;
+  // The can_* relation the method asks on the service's entrance,
+  // <service>_api:main, of a caller presenting identity-service's token
+  // ("can_read"). The service names its entrance object once, in its
+  // configuration; the relation is the model's own (fga-modeling.md §1).
+  //
+  // A method without it asks what its service's api_permission_by_group maps
+  // its group to, and failing that its service's default_api_permission. Only
+  // when the service declares neither does it ask nothing: it then refuses
+  // identity's token and, if it declares the rest of its access, fails the CI
+  // check (accesskit.ValidateAPIPermissions).
+  optional string api_permission = 6;
+  // The objects the request names that the call also needs a permission on,
+  // each asked of the caller on identity-service's token beside
+  // api_permission (authz-contract.md §9). The call is allowed only when
+  // api_permission and every check allow; there is no "any of", which is an
+  // `or` inside one permission of the model.
+  //
+  // Placing an agent in a project, for one, is two checks: a can_* on the
+  // project, picked by the access level the request grants
+  // (permission_by_field), and can_configure on the agent.
+  //
+  // Independent of enforcement: a row_only or list_filtered method may need a
+  // check on the container it reads before its handler runs.
+  repeated ObjectCheck checks = 7;
+  // What the method's handler asks beyond api_permission and checks: each
+  // relation it asks of a type that checks do not already ask of that type,
+  // whether of an object the entrance names or of one it does not (the space
+  // at the other end of a link, every space a list spans, a goal's scope).
+  // The entrance asks none of them; the handler does, on the caller's token,
+  // as it runs. accesskit holds them to the model as it holds checks.
+  //
+  // Declared for the token a call is decided on: a token narrowed to one call
+  // (an MCP write, token-contract.md §3.3) permits what api_permission, checks
+  // and these name, and nothing else, so a permission the handler asks and
+  // this leaves out is refused by the details layer whatever the caller holds.
+  // Like checks, each names can_* of the object type, of any object of it.
+  repeated HandlerPermissions handler_permissions = 8;
+}
+
+// The permissions a method's handler asks of objects of one type.
+// Next ID: 3
+message HandlerPermissions {
+  // The can_* relations asked, as object_type defines them
+  // ("can_view_goals").
+  repeated string permissions = 1;
+  // The authorization model type the objects are ("workspace").
+  optional string object_type = 2;
+}
+
+// Where a method's authorization is decided.
+// Next ID: 1
+message Enforcement {
+  // Next ID: 4
+  enum Enum {
+    UNKNOWN = 0;
+    // The service's entrance asks api_permission on <service>_api:main, and
+    // each of `checks`, before the handler runs.
+    ENTRANCE = 1;
+    // The entrance asks nothing: the handler decides from rows that are
+    // themselves authorization data ("the caller manages this source").
+    ROW_ONLY = 2;
+    // The entrance asks nothing: the method spans objects, and the handler
+    // narrows its result to the ones the caller may reach. Always a read.
+    LIST_FILTERED = 3;
+  }
+}
+
+// The operation group a method is in. A service may map its entrance relation
+// by group (api_permission_by_group), and a method in DELETE is never exposed
+// to agents.
+// Next ID: 1
+message OperationGroup {
+  // Next ID: 5
+  enum Enum {
+    UNKNOWN = 0;
+    // Reads.
+    READ = 1;
+    // Changes content.
+    WRITE = 2;
+    // Changes settings, membership or other configuration.
+    MANAGE = 3;
+    // Removes something that cannot be restored.
+    DELETE = 4;
+  }
+}
+
+// One permission the call needs on one object the request names.
+//
+// Exactly one of permission and permission_by_field is set.
+// Next ID: 5
+message ObjectCheck {
+  // The can_* relation asked on the object, as object_type defines it
+  // ("can_configure"). A PEP asks only permissions (fga-modeling.md §2), so a
+  // dotted action point or a bare relation is not accepted here.
+  optional string permission = 1;
+  // The authorization model type the object is ("agent_account").
+  optional string object_type = 2;
+  // Where the object's id comes from, tried in order. The first locator whose
+  // every field is set decides; when none is, the call names no object and is
+  // refused as one that does not exist. A stream is admitted before its first
+  // message arrives, so a streaming method finds its objects by
+  // configured_object only.
+  repeated ObjectLocator object_locators = 3;
+  // The permission, when a request field picks it: the access level a call
+  // grants decides which can_* it needs. Still a declaration: the field's
+  // values and the relations they map to are written here, and a value the
+  // map does not name is denied.
+  optional PermissionByField permission_by_field = 4;
+}
+
+// A request field's values, each mapped to the can_* relation the call then
+// needs.
+// Next ID: 3
+message PermissionByField {
+  // A dotted path of field names from the request message ("access"); every
+  // field but the last is a singular message, and the last is a singular
+  // string, integer or enum. Read like an ObjectLocator's field path.
+  optional string field_path = 1;
+  // The can_* relation by the field's value: an enum by its value's name
+  // ("EDITOR"), an integer in decimal, a string as it is.
+  map<string, string> permissions = 2;
+}
+
+// One way to find the object a call acts on.
+//
+// Exactly one of field_paths and configured_object is set.
+// Next ID: 4
+message ObjectLocator {
+  // Request fields, each a dotted path of field names from the request message
+  // ("view.project_id"). The last field of each path is a string or an integer;
+  // a repeated one yields its first element. A zero or empty value is not set:
+  // no object has the id 0 or "".
+  //
+  // Without a lookup there is exactly one path, and its value IS the object's
+  // id. With a lookup, the values of every path are the lookup's keys.
+  //
+  // On a plain HTTP route (a service's access.http.json, accesskit.HTTPRoute)
+  // there is no request message, and each path is one parameter name instead,
+  // never dotted: a name the route's pattern has as a wildcard ({vin}) is that
+  // path parameter, any other the query parameter of that name, read as a
+  // string. A permission_by_field's field_path names a parameter the same way.
+  repeated string field_paths = 1;
+  // A lookup the service supplies, named here: it turns the keys into the id of
+  // the object, typically the container a row is in ("work_item" finds the
+  // project a work item is in). The name is the service's own; the
+  // authorization model never sees it.
+  optional string lookup = 2;
+  // A fixed object the service is configured with, by the name the service
+  // supplies its id under ("platform"): for an action on the one object no
+  // request names.
+  optional string configured_object = 3;
+}
+
+// Which gateways forward a method to their callers. Exposure only decides what
+// a gateway forwards; the service's entrance still decides every call. The
+// vehicle gateway is not here: it forwards a method that serves VEHICLE
+// (callers.kinds), since a vehicle's token is addressed to the Deployment
+// itself, not to the gateway (txm/kubernetes/vehicle_api/routes).
+// Next ID: 3
+message Exposure {
+  // Browsers, through center-api. The caller is a person, so the method must
+  // serve people.
+  optional bool allow_browser = 1;
+  // Agents, through the MCP gateway. The caller is an agent acting for a
+  // person or an agent calling as itself, so the method must serve at least
+  // one of DELEGATED_AGENT and AUTONOMOUS_AGENT (the entrance decides which),
+  // and is never in the DELETE group.
+  optional bool allow_agent = 2;
+}
+
+extend google.protobuf.MethodOptions {
+  // The callers option (50100) stays readable beside this one until every
+  // service that declares it has moved to access.callers; a method declares one
+  // or the other, never both.
+  optional Access access = 50101;
+}
+
+extend google.protobuf.ServiceOptions {
+  // 50102 was agent_grants (v1 task grants); never reuse it.
+
+  // The can_* a method of this service asks on its entrance when it declares
+  // its access, no api_permission of its own, and a group
+  // api_permission_by_group does not map ("can_call"): for a service whose
+  // methods mostly ask the same, so each method states only how it differs. A
+  // method's own api_permission wins; a method with no access declaration
+  // refuses identity's token either way.
+  optional string default_api_permission = 50103;
+  // The can_* a method of this service asks on its entrance by its operation
+  // group, when it declares no api_permission of its own: so a method states
+  // only its group, as a GCP method belongs to a permission that roles bundle.
+  // A method's own api_permission wins over it, and it over
+  // default_api_permission. Every relation it names is a can_* the service's
+  // entrance type defines (accesskit.ValidateAPIPermissions).
+  optional ApiPermissionByGroup api_permission_by_group = 50104;
+}
+
+// The can_* a service's entrance asks of a method in each operation group. A
+// group left unset falls back to the service's default_api_permission.
+// Next ID: 5
+message ApiPermissionByGroup {
+  optional string read = 1;
+  optional string write = 2;
+  optional string manage = 3;
+  optional string delete = 4;
+}

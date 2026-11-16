@@ -1224,6 +1224,19 @@ export default {
     }
   },
   datasource: {
+    documentService: {
+      connectionTitle: '连接',
+      authenticationManaged: '身份认证由部署托管，无需在此填写凭证。',
+      sourceHint: '选择要从 Tranxmart 文档目录同步的来源。',
+      selectionRequired: '请至少选择一个文档来源',
+      source: {
+        manual: '上传文档',
+        github: 'GitHub',
+        feishu: '飞书',
+      },
+    },
+    schedule5min: '每 5 分钟',
+    noResourcesDesc_document_service: '无法加载文档来源，请重试或检查部署中的文档服务配置。',
     title: '数据源管理',
     description: '配置外部数据源，自动同步内容到知识库',
     add: '添加数据源',
@@ -1446,6 +1459,7 @@ export default {
       cloudFolderLimitation: 'Confluence Cloud 暂不支持在此列出空间顶层文件夹等容器下的页面；选择整个空间仍会同步它们。'
     },
     connectorDesc: {
+      document_service: '同步 Tranxmart 文档服务中的文档',
       feishu: '同步飞书知识库中的文档、表格、文件',
       lark: '同步 Lark 知识库中的文档、表格、文件（飞书国际版）',
       feishu_drive: "同步飞书云盘文件夹中的文档、表格、文件",
@@ -1461,6 +1475,7 @@ export default {
       seafile: '同步 Seafile 资料库中的目录与文件'
     },
     connector: {
+      document_service: 'Tranxmart Documents',
       feishu: '飞书',
       lark: 'Lark（飞书国际版）',
       feishu_drive: "飞书云盘",
@@ -1533,6 +1548,9 @@ export default {
       loadNotFoundHint: "folder_token 不存在或已删除，请确认从飞书云盘文件夹 URL 复制的 token 正确。",
     },
     syncError: {
+      unsupported_file_type: '不支持此文件类型，已跳过。',
+      document_service_empty_file: '文档为空，已跳过。',
+      file_too_large: '文件超过大小限制，已跳过。',
       dingtalk_document_failed: '无法读取钉钉文档，请检查访问权限后重试同步。',
       dingtalk_document_too_large: '钉钉文件超过 64 MiB 下载上限，本次已跳过，请压缩或拆分后再同步。',
       dingtalk_resource_failed: '钉钉资源不可用，请检查访问权限和已选资源后重试。',

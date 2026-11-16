@@ -8378,6 +8378,19 @@ export default {
     daysAgo: '{days} days ago'
   },
   datasource: {
+    documentService: {
+      connectionTitle: 'Connection',
+      authenticationManaged: 'Authentication is managed by this deployment. No credentials are needed here.',
+      sourceHint: 'Choose which document sources to sync from the Tranxmart catalog.',
+      selectionRequired: 'Select at least one document source',
+      source: {
+        manual: 'Uploaded documents',
+        github: 'GitHub',
+        feishu: 'Feishu',
+      },
+    },
+    schedule5min: 'Every 5 minutes',
+    noResourcesDesc_document_service: 'Document sources could not be loaded. Retry or check the deployment’s Document Service configuration.',
     title: 'Data Sources',
     description: 'Configure external data sources to sync content into this knowledge base',
     add: 'Add Data Source',
@@ -8519,6 +8532,7 @@ export default {
       docsFailedSummary: '{n} document(s) failed to sync'
     },
     connector: {
+      document_service: 'Tranxmart Documents',
       feishu: 'Feishu',
       lark: 'Lark',
       feishu_drive: 'Feishu Drive',
@@ -8534,6 +8548,7 @@ export default {
       seafile: 'Seafile'
     },
     connectorDesc: {
+      document_service: 'Sync documents from the Tranxmart Document Service',
       feishu: 'Sync documents, spreadsheets and files from Feishu Wiki',
       lark: 'Sync documents, spreadsheets and files from Lark Wiki (Feishu international)',
       feishu_drive: 'Sync documents, spreadsheets and files from a Feishu Drive folder',
@@ -8685,6 +8700,9 @@ export default {
     hoursAgo: '{n}h ago',
     daysAgo: '{n}d ago',
     syncError: {
+      unsupported_file_type: 'This file type is not supported and was skipped.',
+      document_service_empty_file: 'The document is empty and was skipped.',
+      file_too_large: 'The file exceeds the size limit and was skipped.',
       dingtalk_document_failed: 'DingTalk document could not be read; check access and retry the sync.',
       dingtalk_document_too_large: 'DingTalk file exceeds the 64 MiB download limit; skipped for this sync. Compress or split the file.',
       dingtalk_resource_failed: 'DingTalk resource is unavailable; check access and the saved selection, then retry.',

@@ -355,3 +355,20 @@ test('DingTalk configuration and sync failures remain localized after pruning', 
     }
   }
 })
+
+test('Document Service setup texts remain localized after pruning', () => {
+  const keys = [
+    'connector.document_service', 'connectorDesc.document_service', 'schedule5min',
+    'noResourcesDesc_document_service', 'documentService.connectionTitle',
+    'documentService.authenticationManaged', 'documentService.sourceHint',
+    'documentService.selectionRequired',
+    ...['manual', 'github', 'feishu'].map(source => `documentService.source.${source}`),
+    ...['unsupported_file_type', 'document_service_empty_file', 'file_too_large'].map(code => `syncError.${code}`),
+  ].map(key => `datasource.${key}`)
+  for (const key of keys) {
+    assert.ok(referencedKeys.has(key), `pruning would remove ${key}`)
+    for (const [locale, bundle] of Object.entries(LOCALE_BUNDLES)) {
+      assert.equal(typeof getLocaleValueAtPath(bundle, key), 'string', `${locale}: missing ${key}`)
+    }
+  }
+})

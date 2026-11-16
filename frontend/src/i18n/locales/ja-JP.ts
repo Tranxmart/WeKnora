@@ -8378,6 +8378,19 @@ export default {
     daysAgo: '{days}日前'
   },
   datasource: {
+    documentService: {
+      connectionTitle: '接続',
+      authenticationManaged: '認証はデプロイ環境で管理されます。ここで認証情報を入力する必要はありません。',
+      sourceHint: 'Tranxmart の文書カタログから同期するソースを選択してください。',
+      selectionRequired: '文書ソースを 1 つ以上選択してください',
+      source: {
+        manual: 'アップロード文書',
+        github: 'GitHub',
+        feishu: 'Feishu',
+      },
+    },
+    schedule5min: '5 分ごと',
+    noResourcesDesc_document_service: '文書ソースを読み込めません。再試行するか、デプロイ環境の Document Service 設定を確認してください。',
     title: 'データソース',
     description: 'このナレッジベースにコンテンツを同期する外部データソースを設定します',
     add: 'データソースを追加',
@@ -8519,6 +8532,7 @@ export default {
       docsFailedSummary: '{n}件のドキュメントの同期に失敗しました'
     },
     connector: {
+      document_service: 'Tranxmart Documents',
       feishu: 'Feishu',
       lark: 'Lark',
       feishu_drive: 'Feishu Drive',
@@ -8534,6 +8548,7 @@ export default {
       seafile: 'Seafile'
     },
     connectorDesc: {
+      document_service: 'Tranxmart Document Service の文書を同期',
       feishu: 'Feishu Wikiからドキュメント、スプレッドシート、ファイルを同期します',
       lark: 'Lark Wiki（Feishu国際版）からドキュメント、スプレッドシート、ファイルを同期します',
       feishu_drive: 'Feishu Driveのフォルダからドキュメント、スプレッドシート、ファイルを同期します',
@@ -8685,6 +8700,9 @@ export default {
     hoursAgo: '{n}時間前',
     daysAgo: '{n}日前',
     syncError: {
+      unsupported_file_type: 'このファイル形式はサポートされていないため、スキップされました。',
+      document_service_empty_file: '文書が空のため、スキップされました。',
+      file_too_large: 'ファイルがサイズ制限を超えているため、スキップされました。',
       dingtalk_document_failed: 'DingTalkドキュメントを読み取れません。アクセス権限を確認して同期を再試行してください。',
       dingtalk_document_too_large: 'DingTalkファイルが64 MiBのダウンロード上限を超えたため、今回の同期ではスキップしました。圧縮または分割してください。',
       dingtalk_resource_failed: 'DingTalkリソースを利用できません。アクセス権限と選択したリソースを確認して再試行してください。',

@@ -38,6 +38,7 @@ const (
 	ChannelRSS              = "rss"               // RSS / Atom feed
 	ChannelIMA              = "ima"               // Tencent IMA (ima.qq.com)
 	ChannelSeafile          = "seafile"           // Seafile
+	ChannelDocumentService  = "document_service"  // Tranxmart Documents
 	ChannelNextcloud        = "nextcloud"         // Nextcloud
 )
 

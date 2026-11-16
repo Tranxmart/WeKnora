@@ -103,6 +103,7 @@ const formatTime = (time?: string) => {
 
 const getSourceInfo = (item: KnowledgeItem): { icon: string; label: string } => {
   const ch = item.channel;
+  if (ch === 'document_service') return { icon: 'cloud-download', label: t('datasource.connector.document_service') };
   if (ch === 'feishu') return { icon: 'cloud-download', label: t('knowledgeBase.channelFeishu') };
   // Drive (云盘) connectors use their own channel so Drive docs show
   // "飞书云盘" / "Lark 云盘", distinct from the wiki connector's "飞书".

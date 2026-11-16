@@ -37,6 +37,7 @@ type DataSourceService struct {
 	tenantRepo        interfaces.TenantRepository
 	tagService        interfaces.KnowledgeTagService
 	audit             interfaces.AuditLogService
+	syncLocks         dataSourceSyncLocks
 }
 
 // NewDataSourceService creates a new data source service
@@ -177,6 +178,18 @@ func (s *DataSourceService) updateDataSource(
 		return nil, err
 	}
 
+	if ds.Type == "" {
+		ds.Type = existing.Type
+	}
+	managedType := datasource.UsesWorkloadIdentity(ds.Type) || datasource.UsesWorkloadIdentity(existing.Type)
+	if ds.Type != existing.Type && managedType {
+		return nil, fmt.Errorf("%w: changing deployment-managed source type requires a new data source",
+			datasource.ErrInvalidConfig)
+	}
+	if datasource.UsesWorkloadIdentity(ds.Type) && len(ds.Config) == 0 {
+		ds.Config = existing.Config
+	}
+
 	if ds.KnowledgeBaseID == "" {
 		ds.KnowledgeBaseID = existing.KnowledgeBaseID
 	}
@@ -204,6 +217,9 @@ func (s *DataSourceService) updateDataSource(
 		incomingCfg, parseIncErr := ds.ParseConfig()
 		existingCfg, parseExErr := existing.ParseConfig()
 		if parseIncErr == nil && parseExErr == nil && incomingCfg != nil {
+			if datasource.UsesWorkloadIdentity(ds.Type) && len(incomingCfg.Credentials) != 0 {
+				return nil, datasource.ErrDeploymentManagedCredentials
+			}
 			if incomingCfg.HasCredentials() {
 				logger.Warnf(ctx,
 					"deprecated: credentials in PUT /datasource/%s body are ignored; use PUT /credentials instead",
@@ -233,7 +249,7 @@ func (s *DataSourceService) updateDataSource(
 		configActuallyChanged = !reflect.DeepEqual(*mergedCfg, *existingParsedCfg)
 	}
 	hasCreds := mergedCfg != nil && mergedCfg.HasConfiguredCredentials(ds.Type)
-	if hasCreds && (ds.Type != existing.Type || configActuallyChanged) {
+	if (hasCreds || datasource.UsesWorkloadIdentity(ds.Type)) && (ds.Type != existing.Type || configActuallyChanged) {
 		if err := s.validateDataSourceConfig(ctx, ds); err != nil {
 			return nil, err
 		}
@@ -284,6 +300,9 @@ func (s *DataSourceService) UpdateDataSourceCredentials(
 	if err != nil {
 		return nil, err
 	}
+	if datasource.UsesWorkloadIdentity(existing.Type) {
+		return nil, datasource.ErrDeploymentManagedCredentials
+	}
 	parsed, err := existing.ParseConfig()
 	if err != nil {
 		return nil, err
@@ -324,6 +343,9 @@ func (s *DataSourceService) ClearDataSourceCredentials(ctx context.Context, id s
 	existing, err := s.dsRepo.FindByID(ctx, id)
 	if err != nil {
 		return err
+	}
+	if datasource.UsesWorkloadIdentity(existing.Type) {
+		return datasource.ErrDeploymentManagedCredentials
 	}
 	parsed, err := existing.ParseConfig()
 	if err != nil {
@@ -639,6 +661,14 @@ func (s *DataSourceService) ProcessSync(ctx context.Context, task *asynq.Task) e
 
 	logger.Infof(ctx, "processing data source sync: ds=%s syncLog=%s", payload.DataSourceID, payload.SyncLogID)
 
+	// Load the cursor only after acquiring the lock. The deployment uses one backend
+	// replica with Recreate; this lock is deliberately local to that process.
+	release, err := s.syncLocks.acquire(ctx, payload.DataSourceID)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	// Get data source
 	ds, err := s.GetDataSource(ctx, payload.DataSourceID)
 	sourceMissing := errors.Is(err, datasource.ErrDataSourceNotFound)
@@ -927,6 +957,11 @@ func (s *DataSourceService) applyFetchedItem(
 	ctx context.Context, ds *types.DataSource, item *types.FetchedItem,
 	tagIDs []string, result *types.SyncResult,
 ) (nonBlockingFailure bool, ingestErr error) {
+	if item.PermanentRejection != nil {
+		result.Failed++
+		recordSyncError(result, *item.PermanentRejection)
+		return true, nil
+	}
 	if item.IsDeleted {
 		if !ds.SyncDeletions {
 			// Sync deletion disabled: neither count nor delete.
@@ -1518,6 +1553,16 @@ func (s *DataSourceService) ingestItem(ctx context.Context, ds *types.DataSource
 			return false, fmt.Errorf("check existing datasource knowledge: %w", err)
 		}
 		if existing != nil {
+			// A successful write may precede a failed cursor checkpoint. A replay
+			// of the same accepted Document Service item must not replace it again.
+			if channel == types.ChannelDocumentService {
+				fingerprint := metadata["document_service_fingerprint"]
+				if fingerprint != "" && existing.GetMetadata()["document_service_fingerprint"] == fingerprint {
+					return false, &types.DuplicateKnowledgeError{
+						Message: "document service fingerprint already ingested", Knowledge: existing,
+					}
+				}
+			}
 			// Conflict strategy "skip" (跳过已存在): the item already exists in
 			// the KB, so leave it untouched and report the conflict as a skip
 			// via the shared DuplicateKnowledgeError path (Tencent/WeKnora#4640 —

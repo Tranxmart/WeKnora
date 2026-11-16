@@ -13,12 +13,13 @@ import {
   deleteDataSource,
   putDataSourceCredentials,
   deleteDataSourceCredentials,
+  getConnectorTypes,
+  type ConnectorMeta,
   type DataSource,
   type Resource,
 } from '@/api/datasource'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
 import DataSourceTypeIcon from './DataSourceTypeIcon.vue'
-import { getDatasourceIconUrl } from './datasourceIcons'
 
 const props = defineProps<{
   kbId: string
@@ -50,6 +51,7 @@ const replaceCredentialsMode = ref(false)
 // Replace, OR when nothing is configured yet (degenerate case where the
 // data source row exists with no credentials stored).
 const credentialsInputVisible = computed(() => {
+  if (usesWorkloadIdentity.value) return false
   if (!isEdit.value) return true
   if (!credentialsConfigured.value) return true
   return replaceCredentialsMode.value
@@ -83,6 +85,7 @@ function cancelPendingRemoveCredentials() {
 }
 
 async function confirmRemoveCredentials() {
+  if (usesWorkloadIdentity.value) return
   if (!props.dataSource?.id) return
   removingCredentials.value = true
   try {
@@ -156,6 +159,7 @@ function removeRssAuthHeader(idx: number) {
 }
 
 function needsConnectionTest(): boolean {
+  if (usesWorkloadIdentity.value) return true
   return !(isEdit.value && credentialsConfigured.value && !replaceCredentialsMode.value)
 }
 
@@ -183,6 +187,7 @@ function syncConfluencePublicFieldsToSettings() {
 }
 
 function enterReplaceCredentials() {
+  if (usesWorkloadIdentity.value) return
   pendingRemoveCredentials.value = false
   replaceCredentialsMode.value = true
   hydrateConfluenceCredentialsFromSettings()
@@ -568,6 +573,7 @@ const tempDsId = ref('')
 
 // Schedule presets
 const schedulePresets = computed(() => [
+  { label: t('datasource.schedule5min'), value: '0 */5 * * * *' },
   { label: t('datasource.schedule30min'), value: '0 */30 * * * *' },
   { label: t('datasource.schedule1h'), value: '0 0 * * * *' },
   { label: t('datasource.schedule6h'), value: '0 0 */6 * * *' },
@@ -583,6 +589,7 @@ interface ConnectorDef {
   permissionDocUrl: string
   permissionPageUrl: string
   requiredPermissions: string[]
+  metadata?: Pick<ConnectorMeta, 'auth_type'>
   fields: {
     key: string
     labelKey: string
@@ -596,6 +603,16 @@ interface ConnectorDef {
 }
 
 const connectorDefs = computed<ConnectorDef[]>(() => [
+  {
+    type: 'document_service',
+    available: true,
+    metadata: { auth_type: 'workload_identity' },
+    docUrl: '',
+    permissionDocUrl: '',
+    permissionPageUrl: '',
+    requiredPermissions: [],
+    fields: [],
+  },
   {
     type: 'feishu',
     available: true,
@@ -786,6 +803,21 @@ const connectorDefs = computed<ConnectorDef[]>(() => [
 
 
 const currentDef = computed(() => connectorDefs.value.find(d => d.type === form.value.type))
+const connectorMetadata = ref<ConnectorMeta[]>([])
+const usesWorkloadIdentity = computed(() =>
+  (connectorMetadata.value.find(meta => meta.type === form.value.type) || currentDef.value?.metadata)
+    ?.auth_type === 'workload_identity',
+)
+const documentSourceIds = ['manual', 'github', 'feishu']
+
+async function loadConnectorMetadata() {
+  try {
+    const metadata = await getConnectorTypes()
+    if (Array.isArray(metadata)) connectorMetadata.value = metadata
+  } catch {
+    // Local definitions keep the picker usable if metadata is unavailable.
+  }
+}
 
 const displayedCredentialFields = computed(() => {
   const fields = currentDef.value?.fields || []
@@ -833,6 +865,7 @@ watch(visible, async (v) => {
     return
   }
   step.value = isEdit.value ? 1 : 0
+  void loadConnectorMetadata()
   testResult.value = ''
   testErrorMsg.value = ''
   tempDsId.value = ''
@@ -852,8 +885,7 @@ watch(visible, async (v) => {
 
   if (isEdit.value && props.dataSource) {
     // Reset edit/replace toggle every open so an aborted replace doesn't
-    // carry over. credentialsConfigured will be refreshed from the
-    // /credentials subresource (run separately below).
+    // carry over. Credential presence comes from the main response.
     replaceCredentialsMode.value = false
     credentialsConfigured.value = false
     refreshCredentialsStatus()
@@ -864,7 +896,9 @@ watch(visible, async (v) => {
       type: props.dataSource.type,
       config: {
         credentials: {},
-        resource_ids: editConfig.resource_ids || [],
+        resource_ids: props.dataSource.type === 'document_service' && !editConfig.resource_ids?.length
+          ? [...documentSourceIds]
+          : [...(editConfig.resource_ids || [])],
         settings: props.dataSource.type === 'rss'
           ? hydrateRssFeedUrlsFromConfig(editConfig)
           : { ...(editConfig.settings || {}) },
@@ -945,6 +979,38 @@ watch(
 
 function selectType(def: ConnectorDef) {
   if (!def.available) return
+  const previousType = form.value.type
+  const typeChanged = previousType !== def.type
+  if (typeChanged) {
+    // A paused draft and its settings belong to the connector that created it.
+    // Abandon in-flight creates through the same session guard as drawer close.
+    drawerSession++
+    tempDsPromise = null
+    if (!isEdit.value && tempDsId.value) {
+      void deleteDataSource(tempDsId.value).catch(() => {})
+      tempDsId.value = ''
+    }
+    form.value.config.settings = {}
+    form.value.config.resource_ids = def.type === 'document_service' ? [...documentSourceIds] : []
+    selectedResourceIds.value = [...form.value.config.resource_ids]
+    resources.value = []
+    expandedResourceIds.value = new Set()
+    loadedChildrenIds.value = new Set()
+    loadingChildrenIds.value = new Set()
+    treeFullyLoaded.value = false
+    gitlabProjects.value = []
+    driveFolderToken.value = ''
+    driveFolderTokenError.value = ''
+    driveRootLoaded.value = false
+    if (def.type === 'document_service') {
+      form.value.sync_schedule = '0 */5 * * * *'
+      form.value.sync_mode = 'incremental'
+      form.value.conflict_strategy = 'overwrite'
+      form.value.sync_deletions = true
+    } else if (previousType === 'document_service') {
+      form.value.sync_schedule = '0 0 */6 * * *'
+    }
+  }
   form.value.type = def.type
   form.value.name = t(`datasource.connector.${def.type}`)
   form.value.config.credentials = def.type === "confluence" ? { edition: "server" } : {}
@@ -964,7 +1030,7 @@ function selectType(def: ConnectorDef) {
   if (def.type === 'yuque' && !isEdit.value) {
     form.value.config.settings = { ...form.value.config.settings, folder_mode: 'toc' }
   }
-  if (isGitLabConnector(def.type)) addGitLabProject()
+  if (isGitLabConnector(def.type) && (typeChanged || !gitlabProjects.value.length)) addGitLabProject()
   rssAuthHeaders.value = []
   step.value = 1
 }
@@ -999,7 +1065,7 @@ async function testConnection() {
       } as any)
       await validateConnection(tempDsId.value)
     } else {
-      const creds = { ...form.value.config.credentials }
+      const creds = usesWorkloadIdentity.value ? {} : { ...form.value.config.credentials }
       if (form.value.type === 'rss') {
         // validate-credentials is credentials-only; feed URLs live in settings.
         creds.feed_urls = form.value.config.settings.feed_urls
@@ -1324,6 +1390,10 @@ async function nextStep() {
     MessagePlugin.warning(t('datasource.nextcloud.selectionRequired'))
     return
   }
+  if (step.value === 2 && form.value.type === 'document_service' && selectedResourceIds.value.length === 0) {
+    MessagePlugin.warning(t('datasource.documentService.selectionRequired'))
+    return
+  }
   step.value++
   if (step.value === 2) {
     // Drive connectors need a user-supplied folder_token before listing.
@@ -1358,7 +1428,7 @@ function buildConfigPayload(): Record<string, unknown> {
   syncGitLabProjectsToSettings()
   syncConfluencePublicFieldsToSettings()
   return {
-    credentials: isEdit.value ? {} : { ...form.value.config.credentials },
+    credentials: isEdit.value || usesWorkloadIdentity.value ? {} : { ...form.value.config.credentials },
     resource_ids: form.value.config.resource_ids,
     settings: form.value.config.settings,
   }
@@ -1368,6 +1438,7 @@ function buildConfigPayload(): Record<string, unknown> {
 // least one value, commit it to /credentials before the main PUT. Aborts
 // the whole submit on failure so we don't leave the row partially saved.
 async function commitCredentialsIfNeeded(dsId: string): Promise<boolean> {
+  if (usesWorkloadIdentity.value) return true
   if (!isEdit.value || !replaceCredentialsMode.value) return true
   syncRssAuthHeadersToCredentials()
   syncConfluencePublicFieldsToSettings()
@@ -1390,6 +1461,10 @@ async function commitCredentialsIfNeeded(dsId: string): Promise<boolean> {
 
 // --- Final submit ---
 async function handleSubmit() {
+  if (form.value.type === 'document_service' && selectedResourceIds.value.length === 0) {
+    MessagePlugin.warning(t('datasource.documentService.selectionRequired'))
+    return
+  }
   form.value.config.resource_ids = selectedResourceIds.value
   submitting.value = true
   try {
@@ -1518,9 +1593,16 @@ function resourceRowState(id: string): CheckState {
   return checkStates.value.get(id) || 'unchecked'
 }
 
+function resourceName(resource: Resource): string {
+  if (form.value.type === 'document_service' && documentSourceIds.includes(resource.external_id)) {
+    return t(`datasource.documentService.source.${resource.external_id}`)
+  }
+  return resource.name || t('datasource.untitled')
+}
+
 const stepTitles = computed(() => [
   t('datasource.step.selectType'),
-  t('datasource.step.credentials'),
+  usesWorkloadIdentity.value ? t('datasource.documentService.connectionTitle') : t('datasource.step.credentials'),
   t('datasource.step.resources'),
   t('datasource.step.strategy'),
 ])
@@ -1554,12 +1636,8 @@ const drawerConfirmText = computed(() => {
     @confirm="handleDrawerConfirm"
     @cancel="handleClose"
   >
-    <template v-if="form.type && getDatasourceIconUrl(form.type)" #headerIcon>
-      <img
-        :src="getDatasourceIconUrl(form.type)"
-        :alt="form.type"
-        class="datasource-header-icon__img"
-      >
+    <template v-if="form.type" #headerIcon>
+      <DataSourceTypeIcon :type="form.type" :size="24" />
     </template>
 
     <template v-if="step === 1" #footer-left>
@@ -1740,9 +1818,13 @@ const drawerConfirmText = computed(() => {
       </section>
 
       <section class="setting-drawer__section">
-        <h4 class="setting-drawer__section-title">{{ t('datasource.credentialsLabel') }}</h4>
+        <h4 class="setting-drawer__section-title">{{ usesWorkloadIdentity ? t('datasource.documentService.connectionTitle') : t('datasource.credentialsLabel') }}</h4>
 
-        <div v-if="isEdit && credentialsConfigured && !replaceCredentialsMode" class="form-item">
+        <p v-if="usesWorkloadIdentity" class="form-desc">
+          {{ t('datasource.documentService.authenticationManaged') }}
+        </p>
+
+        <div v-else-if="isEdit && credentialsConfigured && !replaceCredentialsMode" class="form-item">
           <div
             class="credential-faux-input"
             :class="{ 'is-confirm-remove': pendingRemoveCredentials }"
@@ -1921,7 +2003,7 @@ const drawerConfirmText = computed(() => {
       </template>
       <template v-else>
       <h4 class="setting-drawer__section-title">{{ t('datasource.step.resources') }}</h4>
-      <p class="ds-resource-hint">{{ t('datasource.resourceHint') }}</p>
+      <p class="ds-resource-hint">{{ form.type === 'document_service' ? t('datasource.documentService.sourceHint') : t('datasource.resourceHint') }}</p>
 
       <!-- Drive (云盘) root input: shown alongside the tree (not as a switch).
            The user supplies a folder_token (or a Drive folder URL) and clicks
@@ -2039,8 +2121,8 @@ const drawerConfirmText = computed(() => {
               <t-icon :name="resourceIconName(r)" size="16px" />
             </span>
             <span class="resource-picker__label">
-              <span class="resource-picker__name" :title="r.name || t('datasource.untitled')">
-                {{ r.name || t('datasource.untitled') }}
+              <span class="resource-picker__name" :title="resourceName(r)">
+                {{ resourceName(r) }}
               </span>
               <span
                 v-if="shouldShowResourceType(r.type)"
@@ -2062,7 +2144,7 @@ const drawerConfirmText = computed(() => {
         <t-icon name="info-circle" size="32px" style="color: var(--td-warning-color); margin-bottom: 8px;" />
         <p class="ds-empty-title">{{ t('datasource.noResources') }}</p>
         <p class="ds-empty-desc">{{ t(`datasource.noResourcesDesc_${form.type}`, t('datasource.noResourcesDesc')) }}</p>
-        <div class="ds-guide-steps">
+        <div v-if="!usesWorkloadIdentity" class="ds-guide-steps">
           <div class="ds-guide-step">
             <span class="ds-guide-num">1</span>
             <span>{{ t(`datasource.guideStep1_${form.type}`, t('datasource.guideStep1')) }}</span>

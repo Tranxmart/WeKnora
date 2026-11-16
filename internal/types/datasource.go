@@ -28,22 +28,23 @@ const (
 	ConnectorTypeFeishuDrive = "feishu_drive"
 	// ConnectorTypeLarkDrive is the Lark (international) Drive mode, the
 	// international counterpart of ConnectorTypeFeishuDrive.
-	ConnectorTypeLarkDrive   = "lark_drive"
-	ConnectorTypeNotion      = "notion"
-	ConnectorTypeConfluence  = "confluence"
-	ConnectorTypeYuque       = "yuque"
-	ConnectorTypeGitHub      = "github"
-	ConnectorTypeGoogleDrive = "google_drive"
-	ConnectorTypeOneDrive    = "onedrive"
-	ConnectorTypeDingTalk    = "dingtalk"
-	ConnectorTypeWebCrawler  = "web_crawler"
-	ConnectorTypeSlack       = "slack"
-	ConnectorTypeIMAP        = "imap"
-	ConnectorTypeRSS         = "rss"
-	ConnectorTypeGitLab      = "gitlab"
-	ConnectorTypeIMA         = "ima"
-	ConnectorTypeSeafile     = "seafile"
-	ConnectorTypeNextcloud   = "nextcloud"
+	ConnectorTypeLarkDrive       = "lark_drive"
+	ConnectorTypeNotion          = "notion"
+	ConnectorTypeConfluence      = "confluence"
+	ConnectorTypeYuque           = "yuque"
+	ConnectorTypeGitHub          = "github"
+	ConnectorTypeGoogleDrive     = "google_drive"
+	ConnectorTypeOneDrive        = "onedrive"
+	ConnectorTypeDingTalk        = "dingtalk"
+	ConnectorTypeWebCrawler      = "web_crawler"
+	ConnectorTypeSlack           = "slack"
+	ConnectorTypeIMAP            = "imap"
+	ConnectorTypeRSS             = "rss"
+	ConnectorTypeGitLab          = "gitlab"
+	ConnectorTypeIMA             = "ima"
+	ConnectorTypeSeafile         = "seafile"
+	ConnectorTypeNextcloud       = "nextcloud"
+	ConnectorTypeDocumentService = "document_service"
 
 	// Sync modes
 	SyncModeIncremental = "incremental"
@@ -309,6 +310,10 @@ type Resource struct {
 
 // FetchedItem represents a single document/content item fetched from external source
 type FetchedItem struct {
+	// PermanentRejection records a visible file rejection without modifying a prior import.
+	// Connectors must reconsider rejected files on subsequent scans.
+	PermanentRejection *SyncItemError `json:"permanent_rejection,omitempty"`
+
 	// RetryOnFailure requires streaming ingestion to reject recorded failures
 	// before a connector checkpoints this item. Existing connectors retain their
 	// best-effort handling unless they explicitly opt in.

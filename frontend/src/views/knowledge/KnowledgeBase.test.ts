@@ -75,6 +75,15 @@ test('batch assistant actions include only explicitly selected IDs and disable s
   assert.deepEqual(JSON.parse(JSON.parse(actions[0].query).params.ids), ['selected-a', 'selected-b'])
 })
 
+test('Document Service is available as an exact document channel filter', async t => {
+  const f = await setup(t)
+  const option = f.vm.sourceOptions.find((option: any) => option.value === 'document_service')
+  assert.equal(option?.label, 'datasource.connector.document_service')
+  f.vm.selectedSource = option.value
+  await flush()
+  assert.equal(f.vm.selectedSource, 'document_service')
+})
+
 test('refreshes files and folders for the open KB and ignores unrelated areas and KBs', async t => {
   const f = await setup(t)
   f.emit(change('knowledge.create_manual', { knowledge_base_id: ['other'] }))
