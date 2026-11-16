@@ -8,6 +8,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 
+	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/datasource"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -69,10 +70,6 @@ func TestDocumentServiceDoesNotAcceptStoredCredentialMutation(t *testing.T) {
 	require.ErrorIs(t, err, datasource.ErrDeploymentManagedCredentials)
 	require.ErrorIs(t, svc.ClearDataSourceCredentials(context.Background(), ds.ID),
 		datasource.ErrDeploymentManagedCredentials)
-}
-
-func TestDocumentServiceUsesSourceIdentityDuplicateCheck(t *testing.T) {
-	require.True(t, usesSourceIdentityDuplicateCheck(types.ChannelDocumentService))
 }
 
 type rejectingManagedConnector struct{ conflictSkipConnector }
@@ -167,4 +164,37 @@ func TestDocumentServiceMissingModelsRequireConfigurationAndRetry(t *testing.T) 
 	h.sink.failure = nil
 	require.NoError(t, h.svc.ProcessSync(context.Background(), h.task))
 	require.True(t, h.sink.stored["blocked"])
+}
+
+func TestDocumentServiceIdenticalBytesKeepDistinctDocumentIdentities(t *testing.T) {
+	db := setupKnowledgeSharedAccessDB(t)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	repo := &gitLabKnowledgeRepo{KnowledgeRepository: repository.NewKnowledgeRepository(db)}
+	svc := &knowledgeService{
+		repo:      repo,
+		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}},
+		fileSvc:   &createKnowledgeFileServiceStub{}, task: &createKnowledgeTaskEnqueuerStub{},
+	}
+	ctx := newCreateKnowledgeFileContext()
+	create := func(source, document string) (*types.Knowledge, error) {
+		t.Helper()
+		return svc.CreateKnowledgeFromFile(ctx, "kb-1", newMultipartFileHeader(t, "notes.md", "# same content"),
+			map[string]string{"datasource_id": source, "external_id": document},
+			nil, "Manual/team/notes.md", nil, types.ChannelDocumentService, nil)
+	}
+	first, err := create("ds-1", "document-one")
+	require.NoError(t, err)
+	second, err := create("ds-1", "document-two")
+	require.NoError(t, err, "identical bytes must not collapse distinct Document Service IDs")
+	require.NotEqual(t, first.ID, second.ID)
+	require.Equal(t, "Manual/team", second.FolderPath)
+	otherSource, err := create("ds-2", "document-one")
+	require.NoError(t, err)
+	require.NotEqual(t, first.ID, otherSource.ID)
+	duplicate, err := create("ds-1", "document-two")
+	var duplicateError *types.DuplicateKnowledgeError
+	require.ErrorAs(t, err, &duplicateError)
+	require.Equal(t, second.ID, duplicate.ID)
 }
