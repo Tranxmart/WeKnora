@@ -1224,6 +1224,19 @@ export default {
     }
   },
   datasource: {
+    documentService: {
+      connectionTitle: '連線',
+      authenticationManaged: '身分驗證由部署管理，無須在此填寫憑證。',
+      sourceHint: '選擇要從 Tranxmart 文件目錄同步的來源。',
+      selectionRequired: '請至少選擇一個文件來源',
+      source: {
+        manual: '上傳文件',
+        github: 'GitHub',
+        feishu: '飛書',
+      },
+    },
+    schedule5min: '每 5 分鐘',
+    noResourcesDesc_document_service: '無法載入文件來源，請重試或檢查部署中的文件服務設定。',
     title: '資料源管理',
     description: '設定外部資料源，自動同步內容到知識庫',
     add: '新增資料源',
@@ -1446,6 +1459,7 @@ export default {
       cloudFolderLimitation: 'Confluence Cloud 暫不支持在此列出空間頂層資料夾等容器下的頁面；選擇整個空間仍會同步它們。'
     },
     connectorDesc: {
+      document_service: '同步 Tranxmart 文件服務中的文件',
       feishu: '同步飛書知識庫中的文件、表格、檔案',
       lark: '同步 Lark 知識庫中的文件、表格、檔案（飛書國際版）',
       feishu_drive: "同步飛書雲盤資料夾中的文件、表格、檔案",
@@ -1461,6 +1475,7 @@ export default {
       seafile: '同步 Seafile 資料庫中的目錄與檔案'
     },
     connector: {
+      document_service: 'Tranxmart Documents',
       feishu: '飛書',
       lark: 'Lark（飛書國際版）',
       feishu_drive: "飛書雲盤",
@@ -1533,6 +1548,9 @@ export default {
       loadNotFoundHint: "folder_token 不存在或已刪除，請確認從飛書雲盤資料夾 URL 複製的 token 正確。",
     },
     syncError: {
+      unsupported_file_type: '不支援此檔案類型，已略過。',
+      document_service_empty_file: '文件為空，已略過。',
+      file_too_large: '檔案超過大小限制，已略過。',
       dingtalk_document_failed: '無法讀取釘釘文件，請檢查存取權限後重試同步。',
       dingtalk_document_too_large: '釘釘檔案超過 64 MiB 下載上限，本次已略過，請壓縮或分割後再同步。',
       dingtalk_resource_failed: '釘釘資源不可用，請檢查存取權限和已選資源後重試。',

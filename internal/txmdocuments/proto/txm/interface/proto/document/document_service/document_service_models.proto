@@ -1,0 +1,253 @@
+// Copyright 2026 Tranxmart, Inc. All rights reserved.
+
+syntax = "proto3";
+
+package txm.interface.proto.document.document_service;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "txm/interface/proto/auth/authz_service/authz_service_models.proto";
+
+option go_package = "github.com/Tranxmart/tranxmart/txm/interface/proto/document/document_service/document_service_models";
+
+// SourceType is the stable vocabulary for document source systems and manual uploads.
+message SourceType {
+  // Next ID: 4
+  enum Enum {
+    SOURCE_TYPE_UNKNOWN = 0;
+    GITHUB = 1;
+    FEISHU_DOCUMENT = 2;
+    MANUAL_UPLOAD = 3;
+  }
+}
+
+// HierarchySegment is one current ancestor below a synthetic source root.
+// Its key is source-stable within that tree while its display name is mutable.
+// Next ID: 4
+message HierarchySegment {
+  // Next ID: 4
+  enum Kind {
+    HIERARCHY_SEGMENT_KIND_UNKNOWN = 0;
+    CONTAINER = 1;
+    // A document can be an ancestor because Feishu Wiki document nodes may
+    // have children.
+    DOCUMENT = 2;
+  }
+
+  optional string key = 1;
+  optional string display_name = 2;
+  optional Kind kind = 3;
+}
+
+// Document is the stable logical identity owned by one canonical
+// (source_type, source_key) pair across all its versions. Different source pairs
+// have different document IDs, even when their bytes match. Filename, location,
+// and content hash changes preserve identity; logical deletion retains the binding.
+//
+// Next ID: 9
+message Document {
+  optional string document_id = 1;
+  // The current document name is filename-based. This intentionally does not
+  // expose the historical `current_title` name.
+  optional string current_filename = 2;
+  // Lifecycle state of the logical document.
+  // Next ID: 4
+  enum Status {
+    DOCUMENT_STATUS_UNKNOWN = 0;
+    ACTIVE = 1;
+    DELETED = 2;
+  }
+  optional Status status = 3;
+  // Initiating actor of the first publication. When present, both subject_id
+  // and subject_type are set. An absent Subject means no actor.
+  optional txm.interface.proto.auth.authz_service.Subject created_by = 4;
+  optional google.protobuf.Timestamp created_at = 5;
+  optional google.protobuf.Timestamp updated_at = 6;
+  optional google.protobuf.Timestamp deleted_at = 7;
+  // The current committed version of this logical document.
+  optional string current_document_version_id = 8;
+}
+
+// Representation is document-service policy for presenting verified content.
+message Representation {
+  // Next ID: 3
+  enum Enum {
+    UNKNOWN = 0;
+    MARKDOWN = 1;
+    DOWNLOAD = 2;
+  }
+}
+
+// DocumentVersion is an immutable snapshot of one committed document version.
+// Every version retains its document's canonical source_type and source_key.
+//
+// Next ID: 17
+message DocumentVersion {
+  optional string document_version_id = 1;
+  optional string document_id = 2;
+  optional int32 version_number = 3;
+  optional string filename_at_upload = 5;
+  // Idempotency identity for one source event, distinct from source_key and
+  // source_revision.
+  optional string source_event_key = 6;
+  optional string source_revision = 7;
+  optional google.protobuf.Timestamp created_at = 8;
+  // Initiating actor of this version. When present, both subject_id and
+  // subject_type are set. An absent Subject means no actor.
+  optional txm.interface.proto.auth.authz_service.Subject uploaded_by = 9;
+  // Canonical sha256:<64 lowercase hex> checksum verified by Blobstore.
+  optional string blob_digest = 10;
+  // Verified byte count; an explicit zero represents empty content.
+  optional int64 size_bytes = 11;
+  // Snapshot of Blobstore's detected media type, not the caller's declaration.
+  optional string detected_media_type = 12;
+  optional Representation.Enum representation = 13;
+  // Immutable provenance of the owning source that produced this version.
+  // These identity fields match the document's sole source reference.
+  optional SourceType.Enum source_type = 14;
+  optional string source_key = 15;
+  optional google.protobuf.Struct source_metadata = 16;
+}
+
+// DocumentSourceRef is the sole owning source reference of one logical document.
+// Its (source_type, source_key) pair matches every version and must never be
+// reassigned. Provider aliases and location changes retain this reference.
+//
+// Next ID: 11
+message DocumentSourceRef {
+  optional string document_source_ref_id = 1;
+  optional SourceType.Enum source_type = 2;
+  optional string source_key = 3;
+  optional string document_id = 4;
+  // Current source metadata; historical provenance belongs to DocumentVersion.
+  optional google.protobuf.Struct source_metadata = 5;
+  // Lifecycle state of this external-source mapping, independent of the
+  // logical document's status. Descriptive metadata; it does not restrict access
+  // to retained document versions.
+  // Next ID: 4
+  enum State {
+    SOURCE_STATE_UNKNOWN = 0;
+    ACTIVE = 1;
+    DISABLED = 2;
+  }
+  optional State source_state = 6;
+  optional google.protobuf.Timestamp first_seen_at = 7;
+  optional google.protobuf.Timestamp last_seen_at = 8;
+  optional string last_revision = 9;
+  // Ordered current ancestors. The synthetic source root and this source
+  // reference's own document leaf are intentionally excluded.
+  repeated HierarchySegment hierarchy_path = 10;
+}
+
+// IngestionOutcome records the original successful ingestion result.
+message IngestionOutcome {
+  // Next ID: 4
+  enum Enum {
+    UNKNOWN = 0;
+    CREATED = 1;
+    VERSION_CREATED = 2;
+    UNCHANGED = 3;
+  }
+}
+
+// IngestionReceipt reports the result of one source ingestion operation.
+//
+// Next ID: 9
+message IngestionReceipt {
+  optional Document document = 1;
+  optional DocumentVersion document_version = 2;
+  optional DocumentSourceRef source_ref = 3;
+  // Whether this ingestion created a new logical document.
+  optional bool is_new_document = 4;
+  // Version number created or returned by this ingestion. Zero means no version
+  // was created or returned.
+  optional int32 version_number = 5;
+  // The original outcome and version are preserved on exact retries.
+  optional IngestionOutcome.Enum outcome = 6;
+  optional string operation_id = 7;
+  // An exact retry of the original operation, without replacing its outcome.
+  optional bool is_replayed = 8;
+}
+
+// A person's explicit choice when storage reports equal bytes.
+message UploadDecision {
+  // Next ID: 3
+  enum Enum {
+    UNKNOWN = 0;
+    PROCEED = 1;
+    DECLINE = 2;
+  }
+}
+
+// Durable progress, independent of any temporary upload capability.
+message UploadState {
+  // Next ID: 9
+  enum Enum {
+    UNKNOWN = 0;
+    AWAITING_UPLOAD = 1;
+    VERIFYING = 2;
+    COMMITTED = 3;
+    REJECTED = 4;
+    EXPIRED = 5;
+    RECONCILING = 6;
+    AWAITING_CONFIRMATION = 7;
+    DECLINED = 8;
+  }
+}
+
+// Next ID: 9
+message DocumentUpload {
+  optional string operation_id = 1;
+  optional UploadState.Enum state = 2;
+  optional IngestionReceipt receipt = 3;
+  optional string failure_reason = 4;
+  optional int32 attempt_number = 5;
+  optional google.protobuf.Timestamp expires_at = 6;
+  optional bool duplicate_digest_found = 7;
+  optional ManualNameConflict name_conflict = 8;
+}
+
+// Stable source and ordered keys, never display names. Empty means source overview.
+// Next ID: 3
+message BrowseLocation {
+  optional SourceType.Enum source_type = 1;
+  repeated string ancestor_keys = 2;
+}
+
+// A navigable ancestor or a retained document leaf. A provider document ancestor
+// can have a location without a locally known document_id.
+// Next ID: 6
+message DirectoryEntry {
+  // Stable entry identity, never a display name. Directory/provider ancestor keys
+  // identify navigation segments; retained document leaves use their document UUID.
+  // Synthetic source roots use their source key and returned location.
+  optional string key = 1;
+  // Mutable display label only; never use it to construct ancestor_keys.
+  optional string name = 2;
+  // Presentation kind; a provider DOCUMENT ancestor can still be navigable.
+  optional HierarchySegment.Kind kind = 3;
+  // Use this location to browse children when present, including source roots.
+  // Do not infer navigation from kind alone or append a retained document leaf key.
+  optional BrowseLocation location = 4;
+  // Open a retained local document using this UUID when present. A provider
+  // document ancestor may have a location without a locally known document UUID.
+  optional string document_id = 5;
+}
+
+// Only Manual has user-created persistent directories. Root has no record.
+// Next ID: 7
+message ManualDirectory {
+  optional string directory_id = 1;
+  optional string parent_directory_id = 2;
+  optional string name = 3;
+  optional txm.interface.proto.auth.authz_service.Subject created_by = 4;
+  optional google.protobuf.Timestamp created_at = 5;
+  repeated HierarchySegment hierarchy_path = 6;
+}
+
+// Exactly one existing entry. Returned as a Connect detail and in durable status.
+// Next ID: 3
+message ManualNameConflict {
+  optional string document_id = 1;
+  optional string directory_id = 2;
+}

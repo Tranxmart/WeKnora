@@ -162,18 +162,28 @@ func (r *ConnectorRegistry) List() []string {
 
 // ConnectorMetadata provides metadata about available connectors
 type ConnectorMetadata struct {
-	Type         string   `json:"type"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description"`
-	Icon         string   `json:"icon,omitempty"`
-	Priority     int      `json:"priority"`     // Priority order for UI display (lower = higher priority)
-	AuthType     string   `json:"auth_type"`    // "oauth2", "api_key", "token", etc.
-	Capabilities []string `json:"capabilities"` // "incremental", "webhook", "deletion_sync", etc.
+	Type        string `json:"type"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon,omitempty"`
+	// Priority orders UI display, lowest first.
+	Priority int `json:"priority"`
+	// AuthType includes deployment-managed workload_identity authentication.
+	AuthType     string   `json:"auth_type" enums:"oauth2,api_key,token,password,none,custom,workload_identity"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // GetConnectorMetadata returns metadata for all available connectors
 // This is used by the frontend to display connector options
 var ConnectorMetadataRegistry = map[string]ConnectorMetadata{
+	types.ConnectorTypeDocumentService: {
+		Type:         types.ConnectorTypeDocumentService,
+		Name:         "Tranxmart Documents",
+		Description:  "Sync retained documents from Tranxmart Document Service",
+		Priority:     15,
+		AuthType:     "workload_identity",
+		Capabilities: []string{"incremental", "deletion_sync"},
+	},
 	types.ConnectorTypeFeishu: {
 		Type:         types.ConnectorTypeFeishu,
 		Name:         "Feishu (飞书)",
@@ -348,4 +358,9 @@ func ListAvailableConnectors() []ConnectorMetadata {
 	}
 
 	return metadata
+}
+
+// UsesWorkloadIdentity reports whether authentication is managed by the deployment.
+func UsesWorkloadIdentity(connectorType string) bool {
+	return ConnectorMetadataRegistry[connectorType].AuthType == "workload_identity"
 }

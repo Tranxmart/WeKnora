@@ -303,6 +303,13 @@ func (h *DataSourceHandler) ValidateConnection(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "connected"})
 }
 
+// ValidateDataSourceConnectionRequest tests credentials without persisting them.
+// Credentials may be omitted only for workload_identity connectors.
+type ValidateDataSourceConnectionRequest struct {
+	Type        string                 `json:"type" binding:"required"`
+	Credentials map[string]interface{} `json:"credentials,omitempty"`
+}
+
 // ValidateCredentials godoc
 // @Summary Test connection with raw credentials (no persistence)
 // @Description Validate connectivity to an external data source using type + credentials
@@ -313,7 +320,7 @@ func (h *DataSourceHandler) ValidateConnection(c *gin.Context) {
 // @Tags DataSource
 // @Accept json
 // @Produce json
-// @Param request body object true "type and credentials"
+// @Param request body ValidateDataSourceConnectionRequest true "type and optional deployment-managed credentials"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Router /datasource/validate-credentials [post]
@@ -325,11 +332,18 @@ func (h *DataSourceHandler) ValidateCredentials(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Type        string                 `json:"type" binding:"required"`
-		Credentials map[string]interface{} `json:"credentials" binding:"required"`
-	}
+	var req ValidateDataSourceConnectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: type and credentials are required"})
+		return
+	}
+
+	if datasource.UsesWorkloadIdentity(req.Type) {
+		if len(req.Credentials) != 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": datasource.ErrDeploymentManagedCredentials.Error()})
+			return
+		}
+	} else if req.Credentials == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: type and credentials are required"})
 		return
 	}

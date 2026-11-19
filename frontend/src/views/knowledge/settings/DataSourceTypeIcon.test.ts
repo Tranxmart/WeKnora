@@ -49,6 +49,15 @@ test('the icon name follows the active locale', async () => {
   assert.ok(!html.includes('alt="dingtalk"'), `the raw type leaked into alt: ${html}`)
 })
 
+test('Tranxmart Documents uses the existing vector icon system and its display name', async () => {
+  for (const locale of ['zh-CN', 'en-US'] as const) {
+    const html = await render('document_service', locale)
+    assert.ok(html.includes('<svg'), html)
+    assert.ok(html.includes('aria-label="Tranxmart Documents"'), html)
+    assert.ok(!html.includes('ds-type-icon-fallback'), html)
+  }
+})
+
 test('every icon-backed connector uses its localized name', async () => {
   const icons = await server.ssrLoadModule('/src/views/knowledge/settings/datasourceIcons.ts')
   const types = Object.keys(icons.datasourceIconMap)

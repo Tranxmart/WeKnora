@@ -1224,6 +1224,19 @@ export default {
     }
   },
   datasource: {
+    documentService: {
+      connectionTitle: '연결',
+      authenticationManaged: '인증은 배포 환경에서 관리됩니다. 여기에 자격 증명을 입력할 필요가 없습니다.',
+      sourceHint: 'Tranxmart 문서 카탈로그에서 동기화할 소스를 선택하세요.',
+      selectionRequired: '문서 소스를 하나 이상 선택하세요',
+      source: {
+        manual: '업로드 문서',
+        github: 'GitHub',
+        feishu: 'Feishu',
+      },
+    },
+    schedule5min: '5분마다',
+    noResourcesDesc_document_service: '문서 소스를 불러올 수 없습니다. 다시 시도하거나 배포 환경의 Document Service 설정을 확인하세요.',
     title: '데이터 소스 관리',
     description: '외부 데이터 소스를 구성하여 콘텐츠를 지식베이스에 자동 동기화',
     add: '데이터 소스 추가',
@@ -1444,6 +1457,7 @@ export default {
       cloudFolderLimitation: 'Confluence Cloud는 아직 스페이스 최상위 폴더 등 컨테이너 아래의 페이지를 여기에 나열할 수 없습니다. 스페이스 전체를 선택하면 함께 동기화됩니다.'
     },
     connectorDesc: {
+      document_service: 'Tranxmart Document Service의 문서 동기화',
       feishu: '페이슈 위키에서 문서, 스프레드시트, 파일 동기화',
       lark: 'Lark 위키에서 문서, 스프레드시트, 파일 동기화',
       feishu_drive: "페이슈 드라이브 폴더에서 문서, 스프레드시트, 파일 동기화",
@@ -1459,6 +1473,7 @@ export default {
       seafile: 'Seafile 라이브러리의 폴더와 파일 동기화'
     },
     connector: {
+      document_service: 'Tranxmart Documents',
       feishu: '페이슈 (Feishu)',
       lark: 'Lark (Feishu 글로벌)',
       feishu_drive: "페이슈 드라이브",
@@ -1531,6 +1546,9 @@ export default {
       loadNotFoundHint: "folder_token이 존재하지 않거나 삭제되었습니다. 페이슈 드라이브 폴더 URL에서 복사한 토큰이 맞는지 확인하세요.",
     },
     syncError: {
+      unsupported_file_type: '지원하지 않는 파일 형식이므로 건너뛰었습니다.',
+      document_service_empty_file: '문서가 비어 있어 건너뛰었습니다.',
+      file_too_large: '파일이 크기 제한을 초과하여 건너뛰었습니다.',
       dingtalk_document_failed: 'DingTalk 문서를 읽을 수 없습니다. 접근 권한을 확인하고 동기화를 다시 시도하세요.',
       dingtalk_document_too_large: 'DingTalk 파일이 64 MiB 다운로드 제한을 초과하여 이번 동기화에서 건너뛰었습니다. 압축하거나 분할해 주세요.',
       dingtalk_resource_failed: 'DingTalk 리소스를 사용할 수 없습니다. 접근 권한과 선택한 리소스를 확인한 후 다시 시도하세요.',

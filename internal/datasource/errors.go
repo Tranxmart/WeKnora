@@ -19,8 +19,11 @@ var (
 	ErrDataSourceNotActive = errors.New("data source is not active")
 
 	// Configuration errors
-	ErrInvalidConfig      = errors.New("invalid configuration")
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidConfig                = errors.New("invalid configuration")
+	ErrInvalidCredentials           = errors.New("invalid credentials")
+	ErrDeploymentManagedCredentials = errors.New(
+		"authentication is managed by the deployment; credentials cannot be supplied or changed",
+	)
 
 	// Sync errors
 	ErrSyncFailed       = errors.New("sync operation failed")

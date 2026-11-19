@@ -730,6 +730,7 @@ const sourceOptions = computed(() => [
   { label: t('knowledgeBase.sourceManual'), value: 'manual' },
   { label: t('knowledgeBase.sourceApi'), value: 'api' },
   { label: t('knowledgeBase.sourceBrowserExtension'), value: 'browser_extension' },
+  { label: t('datasource.connector.document_service'), value: 'document_service' },
   { label: t('knowledgeBase.channelFeishu'), value: 'feishu' },
   { label: t('knowledgeBase.channelFeishuDrive'), value: 'feishu_drive' },
   { label: t('knowledgeBase.channelNotion'), value: 'notion' },

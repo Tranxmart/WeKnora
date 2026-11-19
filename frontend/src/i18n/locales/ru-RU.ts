@@ -1224,6 +1224,19 @@ export default {
     }
   },
   datasource: {
+    documentService: {
+      connectionTitle: 'Подключение',
+      authenticationManaged: 'Аутентификация управляется развёртыванием. Вводить учётные данные здесь не требуется.',
+      sourceHint: 'Выберите источники документов для синхронизации из каталога Tranxmart.',
+      selectionRequired: 'Выберите хотя бы один источник документов',
+      source: {
+        manual: 'Загруженные документы',
+        github: 'GitHub',
+        feishu: 'Feishu',
+      },
+    },
+    schedule5min: 'Каждые 5 минут',
+    noResourcesDesc_document_service: 'Не удалось загрузить источники документов. Повторите попытку или проверьте настройки Document Service в развёртывании.',
     title: 'Источники данных',
     description: 'Настройте внешние источники данных для автоматической синхронизации контента',
     add: 'Добавить источник',
@@ -1444,6 +1457,7 @@ export default {
       cloudFolderLimitation: 'Confluence Cloud пока не может показать здесь страницы из папок верхнего уровня пространства; при выборе всего пространства они будут синхронизированы.'
     },
     connectorDesc: {
+      document_service: 'Синхронизация документов из Tranxmart Document Service',
       feishu: 'Синхронизация документов, таблиц и файлов из Feishu Wiki',
       lark: 'Синхронизация документов, таблиц и файлов из Lark Wiki',
       feishu_drive: 'Синхронизация документов, таблиц и файлов из папки Feishu Drive',
@@ -1459,6 +1473,7 @@ export default {
       seafile: 'Синхронизация папок и файлов из библиотек Seafile'
     },
     connector: {
+      document_service: 'Tranxmart Documents',
       feishu: 'Feishu (Фэйшу)',
       lark: 'Lark',
       feishu_drive: 'Feishu Drive',
@@ -1531,6 +1546,9 @@ export default {
       loadNotFoundHint: 'folder_token не существует или удалён. Проверьте токен, скопированный из URL папки Feishu Drive.',
     },
     syncError: {
+      unsupported_file_type: 'Этот тип файла не поддерживается; файл пропущен.',
+      document_service_empty_file: 'Документ пуст и был пропущен.',
+      file_too_large: 'Файл превышает ограничение размера и был пропущен.',
       dingtalk_document_failed: 'Не удалось прочитать документ DingTalk. Проверьте права доступа и повторите синхронизацию.',
       dingtalk_document_too_large: 'Файл DingTalk превышает лимит загрузки 64 MiB и пропущен в этой синхронизации. Сожмите или разделите файл.',
       dingtalk_resource_failed: 'Ресурс DingTalk недоступен. Проверьте права доступа и выбранные ресурсы, затем повторите попытку.',

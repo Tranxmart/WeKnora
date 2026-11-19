@@ -9,6 +9,11 @@ import dingtalkIcon from '@/assets/img/im/dingtalk.svg'
 import imaIcon from '@/assets/img/datasource-ima.png'
 import seafileIcon from '@/assets/img/datasource-seafile.png'
 import nextcloudIcon from '@/assets/img/datasource-nextcloud.svg'
+import { FileIcon } from 'tdesign-icons-vue-next'
+
+export const datasourceComponentIconMap = {
+  document_service: FileIcon,
+}
 
 export const datasourceIconMap: Record<string, string> = {
   feishu: feishuIcon,

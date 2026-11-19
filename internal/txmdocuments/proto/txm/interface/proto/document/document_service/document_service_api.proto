@@ -1,0 +1,535 @@
+// Copyright 2026 Tranxmart, Inc. All rights reserved.
+
+syntax = "proto3";
+
+package txm.interface.proto.document.document_service.document_service_api;
+
+import "google/protobuf/timestamp.proto";
+import "txm/interface/proto/auth/access.proto";
+import "txm/interface/proto/auth/authz_service/authz_service_models.proto";
+import "txm/interface/proto/document/document_service/document_service_models.proto";
+
+option go_package = "github.com/Tranxmart/tranxmart/txm/interface/proto/document/document_service/document_service_api";
+
+// The reads of the documents document-service holds. A caller names a
+// document by its URL or by the document_id this service gave it; nothing
+// else about the caller enters the contract.
+//
+// Catalog reads are decided on document-service's own entrance alone: can_read
+// on document_service_api:main, for a caller presenting identity's token.
+// Past the entrance every caller may read every document today. Each document
+// in a reply still carries its own access, so narrowing it to what the viewer
+// may open changes the values the replies carry, not their shape.
+service DocumentService {
+  // The document this service holds for a URL. It only finds documents
+  // already imported: a URL whose source has no adapter yet, or whose
+  // document was never imported, is UNRECOGNIZED rather than an error. A
+  // document marked deleted still resolves: the URL still names it, and
+  // whether it is deleted is BatchGetDocuments' status, not a second copy here.
+  // INVALID_ARGUMENT for a URL that is not an absolute http(s) URL.
+  rpc Resolve(ResolveRequest) returns (ResolveResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [
+          PERSON,
+          DELEGATED_AGENT,
+          AUTONOMOUS_AGENT,
+          SERVICE
+        ]
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+
+  // The documents named by id, in request order, one entry per distinct id.
+  // An id this service does not hold is left out. At most 100 ids.
+  rpc BatchGetDocuments(BatchGetDocumentsRequest) returns (BatchGetDocumentsResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [
+          PERSON,
+          DELEGATED_AGENT,
+          AUTONOMOUS_AGENT,
+          SERVICE
+        ]
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+
+  // The active documents whose current version links to a URL in its body.
+  // Links are read from a version's markdown when it is imported (a URL in
+  // a code span or a code block is not a link), so a new version replaces
+  // the links of the one before it. URLs are compared after
+  // normalization (ResolveRequest.url states it). Ordered by document_id.
+  rpc ListBacklinks(ListBacklinksRequest) returns (ListBacklinksResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [
+          PERSON,
+          DELEGATED_AGENT,
+          AUTONOMOUS_AGENT,
+          SERVICE
+        ]
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+
+  rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: WRITE
+      api_permission: "can_edit"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc ListDirectoryEntries(ListDirectoryEntriesRequest) returns (ListDirectoryEntriesResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [
+          PERSON,
+          SERVICE
+        ]
+        reason: "People browse retained documents; services enumerate them for automated consumers."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc ListDocumentVersions(ListDocumentVersionsRequest) returns (ListDocumentVersionsResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc GetDocumentCapabilities(GetDocumentCapabilitiesRequest) returns (GetDocumentCapabilitiesResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc CreateUpload(CreateUploadRequest) returns (CreateUploadResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: WRITE
+      api_permission: "can_edit"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc GetUpload(GetUploadRequest) returns (GetUploadResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc DecideUpload(DecideUploadRequest) returns (DecideUploadResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: WRITE
+      api_permission: "can_edit"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc CompleteUpload(CompleteUploadRequest) returns (CompleteUploadResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: WRITE
+      api_permission: "can_edit"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc GetDocumentContent(GetDocumentContentRequest) returns (GetDocumentContentResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [PERSON]
+        reason: "These operations serve people calling as themselves; service and agent callers are not supported."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+  rpc CreateDocumentDownload(CreateDocumentDownloadRequest) returns (CreateDocumentDownloadResponse) {
+    option (txm.interface.proto.auth.access.access) = {
+      callers: {
+        kinds: [
+          PERSON,
+          SERVICE
+        ]
+        reason: "People and services download retained immutable document versions."
+      }
+      enforcement: ENTRANCE
+      group: READ
+      api_permission: "can_read"
+      exposure: {allow_browser: true}
+    };
+  }
+}
+
+// Whether the caller may open a document.
+message Access {
+  // Next ID: 3
+  enum Enum {
+    ACCESS_UNKNOWN = 0;
+    // Every field of the document is filled.
+    READABLE = 1;
+    // The caller may not open it: only document_id and access are filled.
+    // Nothing is restricted yet.
+    RESTRICTED = 2;
+  }
+}
+
+// Next ID: 2
+message ResolveRequest {
+  // An absolute http or https URL. It is normalized before lookup: scheme
+  // and host lowercased, default port, fragment and an empty query dropped,
+  // trailing slashes of the path dropped. A non-empty query is kept as sent.
+  optional string url = 1;
+}
+
+// Whether Resolve found a document for the URL.
+message ResolveResult {
+  // Next ID: 3
+  enum Enum {
+    RESOLVE_RESULT_UNKNOWN = 0;
+    RESOLVED = 1;
+    // No document this service holds has this URL.
+    UNRECOGNIZED = 2;
+  }
+}
+
+// Next ID: 4
+message ResolveResponse {
+  optional ResolveResult.Enum result = 1;
+  // Set when RESOLVED.
+  optional string document_id = 2;
+  // Set when RESOLVED.
+  optional Access.Enum access = 3;
+}
+
+// Next ID: 2
+message BatchGetDocumentsRequest {
+  repeated string document_ids = 1;
+}
+
+// Next ID: 2
+message BatchGetDocumentsResponse {
+  repeated DocumentSummary documents = 1;
+}
+
+// What a reader is shown about a document. When access is RESTRICTED only
+// document_id and access are set.
+// Next ID: 8
+message DocumentSummary {
+  optional string document_id = 1;
+  optional Access.Enum access = 2;
+  // The document's current filename.
+  optional string title = 3;
+  optional txm.interface.proto.document.document_service.SourceType.Enum source_type = 4;
+  // Who owns the document at its source. Unset when the source does not say,
+  // which is every source today; never the account that imported it.
+  optional txm.interface.proto.auth.authz_service.Subject owner = 5;
+  // When this service last changed the document: a new current version, a
+  // new filename or its deletion. Not the source's own edit time.
+  optional google.protobuf.Timestamp updated_at = 6;
+  optional txm.interface.proto.document.document_service.Document.Status status = 7;
+}
+
+// Next ID: 4
+message ListBacklinksRequest {
+  // The linked URL, normalized as ResolveRequest.url is.
+  optional string url = 1;
+  // At most 200; 0 means 50.
+  optional int32 page_size = 2;
+  // next_page_token of the previous page; empty for the first.
+  optional string page_token = 3;
+}
+
+// Next ID: 3
+message ListBacklinksResponse {
+  repeated Backlink backlinks = 1;
+  // Empty on the last page.
+  optional string next_page_token = 2;
+}
+
+// One document whose body links to the URL.
+// Next ID: 3
+message Backlink {
+  optional string document_id = 1;
+  optional Access.Enum access = 2;
+}
+
+// Same actor and client_request_id replay one immutable intent. Zero size is
+// valid; absent size is invalid. A target may only name a manual document.
+// Next ID: 8
+message CreateUploadRequest {
+  optional string client_request_id = 1;
+  optional string filename = 2;
+  optional int64 size_bytes = 3;
+  optional string declared_media_type = 4;
+  optional string expected_digest = 5;
+  optional string target_document_id = 6;
+  // New documents only. Omission selects Manual root; versions inherit location.
+  optional string directory_id = 7;
+}
+
+// One signed PUT header. Send its key and value unchanged.
+// Next ID: 3
+message PutHeader {
+  optional string key = 1;
+  optional string value = 2;
+}
+
+// Capabilities are ephemeral and returned only while PUT remains eligible.
+// Next ID: 5
+message CreateUploadResponse {
+  optional txm.interface.proto.document.document_service.DocumentUpload upload = 1;
+  optional string put_url = 2;
+  repeated PutHeader put_headers = 3;
+  optional google.protobuf.Timestamp put_url_expire_time = 4;
+}
+
+// An unknown operation and another person's operation both return NOT_FOUND.
+// Next ID: 2
+message GetUploadRequest {
+  optional string operation_id = 1;
+}
+
+// Status never returns a PUT capability.
+// Next ID: 2
+message GetUploadResponse {
+  optional txm.interface.proto.document.document_service.DocumentUpload upload = 1;
+}
+
+// The first duplicate choice is durable. An opposite replay conflicts.
+// Next ID: 3
+message DecideUploadRequest {
+  optional string operation_id = 1;
+  optional txm.interface.proto.document.document_service.UploadDecision.Enum decision = 2;
+}
+
+// Next ID: 5
+message DecideUploadResponse {
+  optional txm.interface.proto.document.document_service.DocumentUpload upload = 1;
+  optional string put_url = 2;
+  repeated PutHeader put_headers = 3;
+  optional google.protobuf.Timestamp put_url_expire_time = 4;
+}
+
+// object_version_id is the exact opaque OSS version from PUT. It is never
+// trimmed or replaced; accepted completion pins permanently disable PUT.
+// Next ID: 3
+message CompleteUploadRequest {
+  optional string operation_id = 1;
+  optional string object_version_id = 2;
+}
+
+// Next ID: 2
+message CompleteUploadResponse {
+  optional txm.interface.proto.document.document_service.DocumentUpload upload = 1;
+}
+
+// Active local documents with a current version and one canonical owner.
+// Ordered by created_at, UUID descending. Source state does not hide retained data.
+// page_size defaults to 50, maximum 100; other values are INVALID_ARGUMENT.
+// page_token is opaque, at most 2048 bytes and bound to the source filter.
+// Next ID: 4
+message ListDocumentsRequest {
+  optional int32 page_size = 1;
+  optional string page_token = 2;
+  repeated txm.interface.proto.document.document_service.SourceType.Enum source_types = 3;
+}
+
+// Next ID: 3
+message ListDocumentsResponse {
+  repeated DocumentListEntry documents = 1;
+  optional string next_page_token = 2;
+}
+
+// Repeated sources retains tag 3; exactly one canonical owner is returned.
+// Next ID: 4
+message DocumentListEntry {
+  optional txm.interface.proto.document.document_service.Document document = 1;
+  optional txm.interface.proto.document.document_service.DocumentVersion current_version = 2;
+  repeated txm.interface.proto.document.document_service.DocumentSourceRef sources = 3;
+}
+
+// A locally deleted, unpublished or unknown document returns NOT_FOUND.
+// Next ID: 2
+message GetDocumentRequest {
+  optional string document_id = 1;
+}
+
+// Next ID: 4
+message GetDocumentResponse {
+  optional txm.interface.proto.document.document_service.Document document = 1;
+  optional txm.interface.proto.document.document_service.DocumentVersion current_version = 2;
+  repeated txm.interface.proto.document.document_service.DocumentSourceRef sources = 3;
+}
+
+// Descending immutable ordinal; same page bounds as ListDocuments.
+// The opaque cursor is bound to document_id.
+// Next ID: 4
+message ListDocumentVersionsRequest {
+  optional string document_id = 1;
+  optional int32 page_size = 2;
+  optional string page_token = 3;
+}
+
+// Next ID: 3
+message ListDocumentVersionsResponse {
+  repeated txm.interface.proto.document.document_service.DocumentVersion versions = 1;
+  optional string next_page_token = 2;
+}
+
+// Next ID: 1
+message GetDocumentCapabilitiesRequest {}
+
+// The entrance requires can_read. This edit hint uses the same native caller
+// token; denied edit permission returns false, while identity/PDP outages fail.
+// Each business RPC independently enforces its own permission.
+// Next ID: 3
+message GetDocumentCapabilitiesResponse {
+  reserved 1;
+  reserved "can_view";
+  optional bool can_edit = 2;
+}
+
+// Omission selects the current version. A foreign or inaccessible pair is
+// NOT_FOUND. Only verified Markdown at most 2 MiB is renderable.
+// Next ID: 3
+message GetDocumentContentRequest {
+  optional string document_id = 1;
+  optional string document_version_id = 2;
+}
+
+// Markdown is verified UTF-8 without NUL, with exact immutable length/SHA256.
+// Consumers must disable raw HTML and enforce their safe-link/image policy.
+// Next ID: 3
+message GetDocumentContentResponse {
+  optional txm.interface.proto.document.document_service.DocumentVersion document_version = 1;
+  optional string markdown = 2;
+}
+
+// The same immutable document/version selection as GetDocumentContent.
+// Nonrenderable and oversized content remains downloadable.
+// Next ID: 3
+message CreateDocumentDownloadRequest {
+  optional string document_id = 1;
+  optional string document_version_id = 2;
+}
+
+// Fresh GET capability valid for at most five minutes. filename is immutable
+// metadata; the unmodified URL supplies generic attachment/octet-stream/identity,
+// not a per-request browser Save As name. Never persist/log the capability.
+// Next ID: 5
+message CreateDocumentDownloadResponse {
+  optional txm.interface.proto.document.document_service.DocumentVersion document_version = 1;
+  optional string download_url = 2;
+  optional google.protobuf.Timestamp expires_at = 3;
+  optional string filename = 4;
+}
+
+// Create a persistent directory below Manual. Exact actor/request retries replay.
+// Next ID: 4
+message CreateDirectoryRequest {
+  optional string client_request_id = 1;
+  // Omission selects the Manual root; an empty value is invalid.
+  optional string parent_directory_id = 2;
+  optional string name = 3;
+}
+
+// Next ID: 2
+message CreateDirectoryResponse {
+  optional txm.interface.proto.document.document_service.ManualDirectory directory = 1;
+}
+
+// Immediate children only; canonical visibility is applied before pagination.
+// Page size defaults to 50, maximum 100. Cursors bind location and filter.
+// Next ID: 5
+message ListDirectoryEntriesRequest {
+  optional txm.interface.proto.document.document_service.BrowseLocation location = 1;
+  optional int32 page_size = 2;
+  optional string page_token = 3;
+  optional bool directories_only = 4;
+}
+
+// Breadcrumbs exclude the synthetic source root and include the current directory.
+// Next ID: 5
+message ListDirectoryEntriesResponse {
+  optional txm.interface.proto.document.document_service.BrowseLocation location = 1;
+  repeated txm.interface.proto.document.document_service.HierarchySegment breadcrumbs = 2;
+  repeated txm.interface.proto.document.document_service.DirectoryEntry entries = 3;
+  optional string next_page_token = 4;
+}

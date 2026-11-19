@@ -41,10 +41,18 @@ async function fixture({
 } = {}) {
   const calls: Array<{ method: string; args: any[] }> = []
   const warnings: string[] = []
+  const state = { managedConnectionFails: false }
   let storedToken = configured ? 'expired-token' : ''
   const api = {
+    async getConnectorTypes() {
+      return [{ type: 'document_service', auth_type: 'workload_identity' }]
+    },
     async validateCredentials(type: string, credentials: Record<string, string>) {
       calls.push({ method: 'validateCredentials', args: [type, { ...credentials }] })
+      if (type === 'document_service') {
+        if (state.managedConnectionFails) throw new Error('workload identity is unavailable')
+        return
+      }
       if (type !== 'confluence' && credentials.access_token !== 'rotated-token') throw new Error('gitlab API /user: status 401')
     },
     async validateConnection(id: string) {
@@ -62,6 +70,12 @@ async function fixture({
     async createDataSource(data: any) {
       calls.push({ method: 'createDataSource', args: [JSON.parse(JSON.stringify(data))] })
       return { data: { id: 'source-temp' } }
+    },
+    async deleteDataSource(id: string) {
+      calls.push({ method: 'deleteDataSource', args: [id] })
+    },
+    async triggerSync(id: string) {
+      calls.push({ method: 'triggerSync', args: [id] })
     },
     // Lazy picker: the first call lists roots, later calls list one level.
     async listResources(id: string, parentId?: string) {
@@ -113,7 +127,7 @@ async function fixture({
     vm.form.config.credentials = { base_url: 'https://gitlab.example.com', access_token: token }
     await nextTick()
   }
-  return { vm, calls, warnings, replace, storedToken: () => storedToken, close: () => app.unmount() }
+  return { vm, props, calls, warnings, state, replace, storedToken: () => storedToken, close: () => app.unmount() }
 }
 
 test('rotated GitLab credentials are tested without updating the saved data source', async () => {
@@ -189,6 +203,157 @@ test('new GitLab data sources continue to test credentials without persistence',
     await f.vm.testConnection()
     assert.equal(f.vm.testResult, 'success')
     assert.deepEqual(f.calls.map(call => call.method), ['validateCredentials'])
+  } finally { f.close() }
+})
+
+const documentResources = ['manual', 'github', 'feishu'].map(external_id => ({
+  external_id, name: external_id, type: 'source', has_children: false,
+}))
+
+test('Tranxmart Documents uses managed authentication and explicit defaults', async () => {
+  const f = await fixture({ create: true, resources: documentResources })
+  try {
+    const def = f.vm.connectorDefs.find((def: any) => def.type === 'document_service')
+    assert.equal(def.metadata.auth_type, 'workload_identity')
+    f.vm.selectType(def)
+    assert.equal(f.vm.form.name, 'datasource.connector.document_service')
+    assert.equal(f.vm.usesWorkloadIdentity, true)
+    assert.equal(f.vm.credentialsInputVisible, false)
+    assert.equal(f.vm.form.sync_schedule, '0 */5 * * * *')
+    assert.equal(f.vm.form.sync_mode, 'incremental')
+    assert.equal(f.vm.form.conflict_strategy, 'overwrite')
+    assert.equal(f.vm.form.sync_deletions, true)
+    assert.deepEqual([...f.vm.selectedResourceIds], ['manual', 'github', 'feishu'])
+    await f.vm.nextStep()
+    await flush()
+    assert.equal(f.vm.step, 2)
+    assert.deepEqual(f.calls.map(call => call.method), ['validateCredentials', 'createDataSource', 'listResources'])
+    assert.deepEqual(f.calls[0].args, ['document_service', {}])
+    assert.equal(f.calls[1].args[0].status, 'paused')
+    assert.deepEqual(f.calls[1].args[0].config.credentials, {})
+    assert.deepEqual([...f.vm.visibleTree].map((row: any) => row.depth), [0, 0, 0])
+    assert.equal(f.vm.selectedResourceCount, 3)
+    assert.equal(f.vm.resourceName(documentResources[0]), 'datasource.documentService.source.manual')
+    assert.deepEqual(f.warnings, [])
+  } finally { f.close() }
+})
+
+test('managed connection failures stay on the connection step and can be retried', async () => {
+  const f = await fixture({ create: true, resources: documentResources })
+  try {
+    f.vm.selectType(f.vm.connectorDefs.find((def: any) => def.type === 'document_service'))
+    f.state.managedConnectionFails = true
+    await f.vm.nextStep()
+    assert.equal(f.vm.step, 1)
+    assert.equal(f.vm.testResult, 'error')
+    assert.match(f.vm.testErrorMsg, /workload identity/)
+    assert.deepEqual(f.calls.map(call => call.method), ['validateCredentials'])
+    f.state.managedConnectionFails = false
+    await f.vm.nextStep()
+    await flush()
+    assert.equal(f.vm.step, 2)
+    assert.equal(f.vm.testResult, 'success')
+  } finally { f.close() }
+})
+
+test('returning to the connector picker keeps the chosen sources and schedule', async () => {
+  const f = await fixture({ create: true, resources: documentResources })
+  try {
+    const def = f.vm.connectorDefs.find((def: any) => def.type === 'document_service')
+    f.vm.selectType(def)
+    f.vm.selectedResourceIds = ['github']
+    f.vm.form.sync_schedule = '0 0 * * * *'
+    f.vm.step = 0
+    f.vm.selectType(def)
+    assert.deepEqual([...f.vm.selectedResourceIds], ['github'])
+    assert.equal(f.vm.form.sync_schedule, '0 0 * * * *')
+    await f.vm.nextStep()
+    await flush()
+    await f.vm.nextStep()
+    assert.equal(f.vm.step, 3)
+    await f.vm.handleSubmit()
+    const update = f.calls.find(call => call.method === 'updateDataSource')!
+    assert.deepEqual(update.args[1].config.resource_ids, ['github'])
+    assert.deepEqual(update.args[1].config.credentials, {})
+    assert.equal(update.args[1].sync_schedule, '0 0 * * * *')
+    assert.deepEqual(f.calls.at(-1), { method: 'triggerSync', args: ['source-temp'] })
+  } finally { f.close() }
+})
+
+test('managed sources require an explicit selection before advancing or saving', async () => {
+  const f = await fixture({ create: true, resources: documentResources })
+  try {
+    f.vm.selectType(f.vm.connectorDefs.find((def: any) => def.type === 'document_service'))
+    f.vm.selectedResourceIds = []
+    f.vm.step = 2
+    await f.vm.nextStep()
+    assert.equal(f.vm.step, 2)
+    await f.vm.handleSubmit()
+    assert.deepEqual(f.calls, [])
+    assert.deepEqual(f.warnings, [
+      'datasource.documentService.selectionRequired', 'datasource.documentService.selectionRequired',
+    ])
+  } finally { f.close() }
+})
+
+test('editing a managed source with no credentials retains saved settings and scope', async () => {
+  const saved = {
+    id: 'managed-source', name: 'Team documents', type: 'document_service',
+    credentials: { credentials: { configured: false } },
+    config: { resource_ids: ['feishu'], settings: { preserved_setting: 'keep' } },
+    sync_schedule: '0 0 * * * *', sync_mode: 'full',
+    conflict_strategy: 'skip', sync_deletions: false,
+  }
+  const f = await fixture({ dataSource: saved, resources: documentResources })
+  try {
+    assert.equal(f.vm.credentialsConfigured, false)
+    assert.equal(f.vm.credentialsInputVisible, false)
+    assert.equal(f.vm.replaceCredentialsMode, false)
+    f.vm.enterReplaceCredentials()
+    assert.equal(f.vm.replaceCredentialsMode, false)
+    await f.vm.confirmRemoveCredentials()
+    await f.vm.nextStep()
+    await flush()
+    assert.deepEqual(f.calls.map(call => call.method), ['validateCredentials', 'listResources'])
+    assert.deepEqual(f.calls[0].args, ['document_service', {}])
+    assert.deepEqual([...f.vm.selectedResourceIds], ['feishu'])
+    await f.vm.nextStep()
+    await f.vm.handleSubmit()
+    const update = f.calls.find(call => call.method === 'updateDataSource')!
+    assert.deepEqual(update.args[1].config, {
+      credentials: {}, resource_ids: ['feishu'], settings: { preserved_setting: 'keep' },
+    })
+    for (const key of ['name', 'sync_schedule', 'sync_mode', 'conflict_strategy', 'sync_deletions']) {
+      assert.equal(update.args[1][key], saved[key as keyof typeof saved], key)
+    }
+    assert.deepEqual(f.warnings, ['datasource.updateSuccessSyncHint'])
+  } finally { f.close() }
+})
+
+test('a legacy empty managed scope is displayed and saved as all three sources', async () => {
+  const f = await fixture({ type: 'document_service', configured: false, settings: {} })
+  try {
+    assert.deepEqual([...f.vm.selectedResourceIds], ['manual', 'github', 'feishu'])
+    await f.vm.handleSubmit()
+    const update = f.calls.find(call => call.method === 'updateDataSource')!
+    assert.deepEqual(update.args[1].config.resource_ids, ['manual', 'github', 'feishu'])
+  } finally { f.close() }
+})
+
+test('changing connector types clears old credentials, selections, settings and draft', async () => {
+  const f = await fixture({ create: true })
+  try {
+    f.vm.selectType(f.vm.connectorDefs.find((def: any) => def.type === 'gitlab'))
+    f.vm.form.config.credentials = { access_token: 'old-secret' }
+    f.vm.form.config.settings = { projects: [{ project_id: 'old-project' }] }
+    f.vm.selectedResourceIds = ['old-resource']
+    f.vm.tempDsId = 'old-draft'
+    f.vm.selectType(f.vm.connectorDefs.find((def: any) => def.type === 'document_service'))
+    assert.deepEqual(Object.keys(f.vm.form.config.credentials), [])
+    assert.deepEqual(Object.keys(f.vm.form.config.settings), [])
+    assert.deepEqual([...f.vm.selectedResourceIds], ['manual', 'github', 'feishu'])
+    assert.equal(f.vm.tempDsId, '')
+    assert.deepEqual(f.calls, [{ method: 'deleteDataSource', args: ['old-draft'] }])
   } finally { f.close() }
 })
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { getDatasourceIconUrl, datasourceIconMap } from './datasourceIcons'
+import type { Component } from 'vue'
+import { datasourceComponentIconMap, datasourceIconMap } from './datasourceIcons'
 import { useConnectorLabel } from '@/composables/useConnectorLabel'
 
 const props = withDefaults(defineProps<{
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<{
 const { connectorLabel } = useConnectorLabel()
 
 const iconMap = datasourceIconMap
+const componentIconMap: Record<string, Component> = datasourceComponentIconMap
 
 function fallbackText(type: string) {
   switch (type) {
@@ -43,8 +45,15 @@ function fallbackText(type: string) {
     :class="`ds-type-icon--${variant}`"
     :style="variant === 'inline' ? { width: `${size}px`, height: `${size}px` } : undefined"
   >
+    <component
+      :is="componentIconMap[type]"
+      v-if="componentIconMap[type]"
+      :size="variant === 'badge' ? 24 : size"
+      role="img"
+      :aria-label="connectorLabel(type)"
+    />
     <img
-      v-if="iconMap[type]"
+      v-else-if="iconMap[type]"
       :src="iconMap[type]"
       :alt="connectorLabel(type)"
       class="ds-type-icon__img"

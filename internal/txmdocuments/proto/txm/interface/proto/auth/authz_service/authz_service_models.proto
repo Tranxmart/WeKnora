@@ -1,0 +1,325 @@
+// Copyright 2026 Tranxmart, Inc. All rights reserved.
+
+syntax = "proto3";
+
+package txm.interface.proto.auth.authz_service;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Tranxmart/tranxmart/txm/interface/proto/auth/authz_service/authz_service_models";
+
+// SubjectType namespaces the principal-kind enum. Authorization keys on the typed
+// subject (user/service/agent/device/vehicle), never on "internal/external" or "human/machine".
+message SubjectType {
+  // Next ID: 7
+  enum Enum {
+    UNKNOWN = 0;
+    USER = 1;
+    SERVICE = 2;
+    DEVICE = 3;
+    // An AI agent acting for a user under a delegation grant. Distinct from
+    // SERVICE (a fixed-function workload acting as itself): agent-typed
+    // subjects default to zero direct permission and act through delegation.
+    AGENT = 4;
+    // A vehicle, proven by its certificate. It has no account: its id is the VIN.
+    VEHICLE = 5;
+    // A program on a vehicle, one account for the whole fleet. Only ever on a
+    // vehicle's act chain, where it is recorded and never decided.
+    VEHICLE_APP = 6;
+  }
+}
+
+// Subject is the concrete principal a decision is made for. subject_id is the
+// stable internal subject UUID (see identity_service), or a vehicle's VIN; it is
+// never a tenant/org field — tenancy lives in the relation graph, not on the subject. Field names
+// are role-specific (subject_*) to match RelationTuple's vocabulary.
+// Next ID: 3
+message Subject {
+  optional SubjectType.Enum subject_type = 1;
+  optional string subject_id = 2;
+}
+
+// Resource is the object a decision is about: an open-string type the model
+// defines plus an id. Field names are role-specific (resource_*) to match
+// Subject's and RelationTuple's vocabulary.
+// Next ID: 3
+message Resource {
+  optional string resource_type = 1; // e.g. "project"
+  optional string resource_id = 2; // e.g. "42"
+}
+
+// CheckOptions carries forward-compatible read knobs (mirrors authzkit.Options).
+// Next ID: 3
+message CheckOptions {
+  // context supplies ABAC attributes for conditions/caveats. It MUST be filled
+  // only by a trusted server-side PIP, never from the untrusted request (P3+).
+  map<string, string> context = 1;
+  // consistency is a read-your-writes token (zookie/ZedToken), used from P2 on.
+  optional string consistency = 2;
+}
+
+// DelegationConstraints is the resource-constraint vocabulary of a delegation
+// grant (Q6): a resource-type allowlist and a named-resource allowlist, both
+// optional. Empty means no narrowing. Typed here (rather than free JSON) so the
+// API cannot accept constraint vocabulary the decider would then fail-closed on.
+// Next ID: 4
+message DelegationConstraints {
+  // groups was a group anchor and is retired: CreateDelegationGrant refuses a
+  // grant that sets it, and a stored grant that set it denies every check.
+  // Removed with the v1 grant RPCs (authz-contract.md §7).
+  repeated string groups = 1;
+  // resource_types allowlists the resource types the task may touch.
+  repeated string resource_types = 2;
+  // resources allowlists individual resources, each written "<type>:<id>", or
+  // every resource of one type, written "<type>:*".
+  //
+  // The type wildcard is for a task that passes a named module gate AND a
+  // check on a resource its issuer cannot name (the project a row is in): with
+  // the terms ANDed, resource_types would have to list app_module as well and
+  // so admit every module, where "app_module:<id>" beside "project:*" does not.
+  // It exists because resource_types cannot name ONE app module. A module's
+  // permission is `module.view` / `module.edit` whichever module it is, and
+  // the module itself is the resource ID — so `resource_types: ["app_module"]`
+  // says "any module". A grant meant for one tool would therefore have
+  // authorized writes to every module the subject can reach, which is the
+  // opposite of what a task-scoped grant is for.
+  //
+  // Terms are ANDed: a resource must satisfy every constraint present, so
+  // adding this one can only narrow.
+  //
+  // DEPLOY ORDER: a decider that predates this field rejects a grant carrying
+  // it (parseConstraints refuses unknown vocabulary), so authz-service must be
+  // deployed before anything issues one. That direction is deliberate — an old
+  // decider denies rather than silently ignoring a narrowing it cannot read.
+  repeated string resources = 3;
+}
+
+// DelegationGrant is one task-scoped delegation: subject allows actor to
+// perform actions within resource_constraints until expires_at. The graph
+// holds long-term ceilings; a grant narrows a single task. id / issued_at /
+// revoked_at are output-only (server-assigned).
+// Next ID: 12
+message DelegationGrant {
+  optional string id = 1;
+  // subject is the delegator whose permission is exercised.
+  optional Subject subject = 2;
+  // actor is the delegate the grant is issued to (typically an agent).
+  optional Subject actor = 3;
+  // actions are the permission points the task may exercise (resource.action
+  // vocabulary, e.g. "dataset.read").
+  repeated string actions = 4;
+  optional DelegationConstraints resource_constraints = 5;
+  optional google.protobuf.Timestamp issued_at = 6;
+  optional google.protobuf.Timestamp expires_at = 7;
+  optional google.protobuf.Timestamp revoked_at = 8;
+  // client_id and task_id are attribution for audit, never decision inputs.
+  optional string client_id = 9;
+  optional string task_id = 10;
+  // parent_grant_id chains a fan-out grant to the grant it narrows (Q7): the
+  // child must keep the subject and only shrink actions / expiry /
+  // constraints, verified at issuance.
+  optional string parent_grant_id = 11;
+}
+
+// RelationTuple is one edge in the authorization graph:
+// (object_type:object_id)#relation@(subject_type:subject_id[#subject_relation]).
+// subject_relation is set only for usersets (e.g. org:sz-ops#member); empty for a
+// direct subject (e.g. user:<uuid>). object/subject types are open strings — the
+// core does not enumerate business resource types.
+// Next ID: 8
+message RelationTuple {
+  optional string object_type = 1; // e.g. "vehicle"
+  optional string object_id = 2; // e.g. "vin-123"
+  optional string relation = 3; // e.g. "in_group", "viewer", "member"
+  optional string subject_type = 4; // e.g. "user", "org", "group"
+  optional string subject_id = 5; // e.g. the subject UUID, or "sz-ops"
+  optional string subject_relation = 6; // userset relation, e.g. "member"; empty = direct
+  // condition names a condition the model declares, e.g. "as_actor": the edge
+  // applies only when it holds. Empty = unconditional. Only the edge names it;
+  // its parameters are set by the PDP at decision time, never stored with the
+  // edge (authz-contract.md §4). Written only through WriteRelationTuples' writes:
+  // a delete names the edge without it, and the older writes refuse it.
+  optional string condition = 7;
+}
+
+// GrantAuditStatus says whether the change an audit entry describes happened.
+// Next ID: 1
+message GrantAuditStatus {
+  // Next ID: 4
+  enum Enum {
+    UNKNOWN = 0;
+    // APPLIED: the change happened — committed with the entry, or confirmed
+    // afterwards.
+    APPLIED = 1;
+    // PENDING: the entry was written before a change in another system, and
+    // the outcome is not known yet.
+    PENDING = 2;
+    // FAILED: the change did not happen; failure_reason says why.
+    FAILED = 3;
+  }
+}
+
+// GrantAuditEntry is one recorded change to the authorization graph or to a
+// delegation grant: who made it, what it was, when, and whether it landed.
+//
+// Two sets of fields say who made it, and they are not equally trustworthy.
+// actor_type / actor_id is what the request body claimed, on the older write
+// RPCs that verify no caller. principal / actor / trace_id are what the
+// verified token said; they are unset or empty on entries written before
+// provenance was recorded, and on every entry the older RPCs write.
+// Next ID: 21
+message GrantAuditEntry {
+  optional string id = 1;
+  // action is what was done: "grant" or "revoke" for an edge, "delegate" or
+  // "revoke_delegation" for a delegation grant.
+  optional string action = 2;
+  optional GrantAuditStatus.Enum status = 3;
+  // failure_reason is set only on a FAILED entry.
+  optional string failure_reason = 4;
+
+  // The edge that changed. For a delegation grant, object_id is the grant id
+  // and the subject is the grant's subject.
+  optional string object_type = 5;
+  optional string object_id = 6;
+  optional string relation = 7;
+  optional string subject_type = 8;
+  optional string subject_id = 9;
+  optional string subject_relation = 10;
+
+  // actor_type / actor_id is the actor the request body named.
+  optional string actor_type = 11;
+  optional string actor_id = 12;
+
+  // principal_kind is "user", "service" or "agent"; principal_id is that
+  // account's id. Superseded by principal.
+  optional string principal_kind = 13;
+  optional string principal_id = 14;
+  // actor_account_id is the agent acting for the principal when the token was
+  // delegated; empty when the principal acted directly. Superseded by actor.
+  optional string actor_account_id = 15;
+  optional string trace_id = 16;
+
+  // batch_id ties together the entries of one write whose outcome was settled
+  // as a unit; empty on entries committed together with their change.
+  optional string batch_id = 17;
+  optional google.protobuf.Timestamp created_at = 18;
+
+  // principal is who the change is answerable to: a person, a service calling
+  // as itself, or an agent acting on nobody's behalf.
+  optional Subject principal = 19;
+  // actor is the agent acting for the principal when the token was delegated;
+  // unset when the principal acted directly. On entries written before the
+  // actor's kind was recorded it carries only subject_id: the kind is not
+  // guessed.
+  optional Subject actor = 20;
+}
+
+// AuthorizationModel describes the model a decision is made under: the types it
+// defines, the relations on each, and how each relation resolves.
+//
+// It is a DESCRIPTION, not the model. The artifact is authz_model.fga,
+// transformed and stored, and that stays the thing a deployment pins and
+// compares. This is the part a reader needs in order to explain a decision —
+// which subjects a relation accepts, and where a derived one comes from — in a
+// shape that does not move when the store's own JSON does.
+// Next ID: 4
+message AuthorizationModel {
+  // model_id is the authorization model id the answering process is pinned to.
+  // Every decision it makes is made under this model, which is why the id
+  // belongs in the same message as the types: a description without it names
+  // no model in particular.
+  optional string model_id = 1;
+  // schema_version is the model language's version, as the model declares it
+  // (e.g. "1.1").
+  optional string schema_version = 2;
+  // types are sorted by name. Their order in the stored model carries no
+  // meaning, so one is chosen here rather than passed through.
+  repeated ModelType types = 3;
+}
+
+// ModelType is one object type and the relations defined on it.
+// Next ID: 3
+message ModelType {
+  optional string type = 1; // e.g. "vehicle"
+  // relations are sorted by name, for the same reason types are.
+  repeated ModelRelation relations = 2;
+}
+
+// ModelRelation is one relation and how a subject reaches it. The three ways
+// below are a UNION — any of them allows — which is every operator this model
+// uses today; undescribed_rewrite is what says so when that stops being true.
+// Next ID: 6
+message ModelRelation {
+  optional string relation = 1; // e.g. "can_read"
+  // direct_subject_types are the subject shapes a STORED tuple may name, as
+  // the model writes them: a type ("user"), a userset ("role#member"), a
+  // wildcard ("user:*"), or any of these under a condition
+  // ("agent with as_actor").
+  // Empty means the relation is derived only, and no tuple can grant it.
+  repeated string direct_subject_types = 2;
+  // computed_relations are relations on the SAME object that also grant this
+  // one — the "or editor" of `define viewer: [...] or editor`.
+  repeated string computed_relations = 3;
+  // tuple_to_usersets are the inherited branches — the "viewer from in_group"
+  // of `define can_read: viewer from in_group or ...`.
+  repeated TupleToUserset tuple_to_usersets = 4;
+  // undescribed_rewrite names what the three fields above are NOT showing.
+  // Empty means they describe the relation whole; otherwise this carries one
+  // or more of these four values, joined by ", " and never repeated:
+  //
+  //   "intersection"                               `a and b`
+  //   "exclusion"                                  `a but not b`
+  //   "unrestricted direct assignment"             a schema 1.0 `this` that
+  //                                                names no subject types
+  //   "an operator this version does not describe" anything later
+  //
+  // This list is the wire contract: it is what describeRewrite writes
+  // (authz-service, internal/fga/model.go), and a reader that matches on the
+  // string matches these and nothing else. A nested union is NOT undescribed:
+  // union is associative, so its branches are flattened into the lists above.
+  //
+  // It exists because the model is data and may gain an operator before this
+  // contract does. The honest answer to that is to say so, so a reader can
+  // show the relation as incompletely described, rather than to drop the
+  // branch silently or to fail a whole read over one relation.
+  optional string undescribed_rewrite = 5;
+}
+
+// TupleToUserset is one inherited branch: hop along `tupleset` from this
+// object, then ask `computed_relation` on every object reached.
+// Next ID: 3
+message TupleToUserset {
+  optional string tupleset = 1; // e.g. "in_group"
+  optional string computed_relation = 2; // e.g. "viewer"
+}
+
+// PermissionMatch namespaces how a rule compares an action.
+message PermissionMatch {
+  // Next ID: 3
+  enum Enum {
+    UNKNOWN = 0;
+    // The action ENDS WITH the pattern, which carries its own dot (".view").
+    SUFFIX = 1;
+    // The action's last dotted segment EQUALS the pattern ("read").
+    LEAF = 2;
+  }
+}
+
+// PermissionRule is one step of the mapping from a permission point — the
+// action a caller asks for, "vehicle.read" — to the relation the decision is
+// made on, "can_read".
+//
+// The mapping is a RULE, not a list, because it is total over an OPEN
+// vocabulary: any action ending ".view" asks `viewer` whatever its prefix, so
+// there is no set of permission points to enumerate, and anything calling
+// itself that set would be a second copy kept by hand. Rules are tried in the
+// order they are returned and the first match decides; an action matching none
+// of them, and carrying no dot, is taken as a relation name as written.
+// Next ID: 4
+message PermissionRule {
+  optional PermissionMatch.Enum match = 1;
+  // pattern is what `match` compares the action against.
+  optional string pattern = 2;
+  // relation is what the decision is then made on.
+  optional string relation = 3;
+}

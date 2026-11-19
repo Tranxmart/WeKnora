@@ -154,3 +154,12 @@ func TestDataSourceResponse_NoConfig(t *testing.T) {
 	// No config jsonb stored → no config object in the response.
 	assert.NotContains(t, string(body), `"config":`)
 }
+
+func TestDocumentServiceCredentialPresenceRemainsFalse(t *testing.T) {
+	response := NewDataSourceResponse(&types.DataSource{
+		Type:   types.ConnectorTypeDocumentService,
+		Config: types.JSON(`{"type":"document_service","resource_ids":["manual"]}`),
+	})
+	assert.False(t, response.Credentials["credentials"].Configured)
+	assert.Equal(t, []string{"manual"}, response.Config.ResourceIDs)
+}

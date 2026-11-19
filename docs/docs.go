@@ -4045,12 +4045,12 @@ const docTemplate = `{
                 "summary": "Test connection with raw credentials (no persistence)",
                 "parameters": [
                     {
-                        "description": "type and credentials",
+                        "description": "type and optional deployment-managed credentials",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/internal_handler.ValidateDataSourceConnectionRequest"
                         }
                     }
                 ],
@@ -4208,7 +4208,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "整体写入 credentials 映射，必须非空",
+                "description": "整体写入 credentials 映射，必须非空；workload_identity 数据源不支持修改凭据",
                 "consumes": [
                     "application/json"
                 ],
@@ -4282,7 +4282,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "清除整个凭据映射；当前仅支持 field=credentials",
+                "description": "清除整个凭据映射；当前仅支持 field=credentials；workload_identity 数据源不支持修改凭据",
                 "produces": [
                     "application/json"
                 ],
@@ -26313,11 +26313,19 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "auth_type": {
-                    "description": "\"oauth2\", \"api_key\", \"token\", etc.",
-                    "type": "string"
+                    "description": "AuthType includes deployment-managed workload_identity authentication.",
+                    "type": "string",
+                    "enum": [
+                        "oauth2",
+                        "api_key",
+                        "token",
+                        "password",
+                        "none",
+                        "custom",
+                        "workload_identity"
+                    ]
                 },
                 "capabilities": {
-                    "description": "\"incremental\", \"webhook\", \"deletion_sync\", etc.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -26333,7 +26341,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "priority": {
-                    "description": "Priority order for UI display (lower = higher priority)",
+                    "description": "Priority orders UI display, lowest first.",
                     "type": "integer"
                 },
                 "type": {
@@ -26379,7 +26387,8 @@ const docTemplate = `{
                 2103,
                 2200,
                 2201,
-                2300
+                2300,
+                2400
             ],
             "x-enum-varnames": [
                 "ErrBadRequest",
@@ -26405,7 +26414,8 @@ const docTemplate = `{
                 "ErrAgentInvalidTemperature",
                 "ErrVectorStoreBindingInvalid",
                 "ErrVectorStoreUnavailable",
-                "ErrModelInUse"
+                "ErrModelInUse",
+                "ErrImportPrerequisiteMissing"
             ]
         },
         "github_com_Tencent_WeKnora_internal_handler_dto.CredentialFieldMetadata": {
@@ -31007,7 +31017,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "attrs": {
-                    "description": "Attrs is the observed attribute map (e.g. contain.text, contain.data_visual)\nproduced by the attribute pipeline. Absent keys mean \"not observed\".",
+                    "description": "Attrs 包含模型观察属性和解析器的 source.* 来源位置；缺少来源键表示未知。",
                     "type": "object",
                     "additionalProperties": {}
                 },
@@ -40466,7 +40476,18 @@ const docTemplate = `{
             ],
             "properties": {
                 "asr_config": {
-                    "$ref": "#/definitions/github_com_Tencent_WeKnora_internal_types.ASRConfig"
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "language": {
+                            "type": "string"
+                        },
+                        "model_id": {
+                            "type": "string"
+                        }
+                    }
                 },
                 "documentSplitting": {
                     "description": "文档分块配置",
@@ -40592,7 +40613,33 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "vlm_config": {
-                    "$ref": "#/definitions/github_com_Tencent_WeKnora_internal_types.VLMConfig"
+                    "type": "object",
+                    "properties": {
+                        "api_key": {
+                            "type": "string"
+                        },
+                        "base_url": {
+                            "type": "string"
+                        },
+                        "custom_instructions": {
+                            "type": "string"
+                        },
+                        "description_language": {
+                            "type": "string"
+                        },
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "interface_type": {
+                            "type": "string"
+                        },
+                        "model_id": {
+                            "type": "string"
+                        },
+                        "model_name": {
+                            "type": "string"
+                        }
+                    }
                 }
             }
         },
@@ -43329,6 +43376,21 @@ const docTemplate = `{
                 },
                 "sort_order": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_handler.ValidateDataSourceConnectionRequest": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "credentials": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "type": {
+                    "type": "string"
                 }
             }
         },

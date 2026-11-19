@@ -70,7 +70,8 @@ export interface ConnectorMeta {
   description: string
   icon: string
   priority: number
-  auth_type: string
+  /** workload_identity uses deployment authentication, without stored credentials. */
+  auth_type: 'workload_identity' | (string & {})
   capabilities: string[]
 }
 
@@ -88,8 +89,8 @@ export interface Resource {
 
 // --- API calls ---
 
-export function getConnectorTypes() {
-  return get('/api/v1/datasource/types')
+export function getConnectorTypes(): Promise<ConnectorMeta[]> {
+  return get('/api/v1/datasource/types') as Promise<ConnectorMeta[]>
 }
 
 export function listDataSources(kbId: string) {

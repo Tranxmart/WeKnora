@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Tencent/WeKnora/internal/datasource"
 	"github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/handler/dto"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -61,7 +62,7 @@ type dataSourceCredentialsPutRequest struct {
 
 // Put godoc
 // @Summary      设置数据源凭据
-// @Description  整体写入 credentials 映射，必须非空
+// @Description  整体写入 credentials 映射，必须非空；workload_identity 数据源不支持修改凭据
 // @Tags         数据源
 // @Accept       json
 // @Produce      json
@@ -76,6 +77,10 @@ type dataSourceCredentialsPutRequest struct {
 func (h *DataSourceCredentialsHandler) Put(c *gin.Context) {
 	ds, ok := h.ownDataSource(c)
 	if !ok {
+		return
+	}
+	if datasource.UsesWorkloadIdentity(ds.Type) {
+		_ = c.Error(errors.NewBadRequestError(datasource.ErrDeploymentManagedCredentials.Error()))
 		return
 	}
 	var req dataSourceCredentialsPutRequest
@@ -110,7 +115,7 @@ func (h *DataSourceCredentialsHandler) Put(c *gin.Context) {
 
 // DeleteField godoc
 // @Summary      清除数据源凭据
-// @Description  清除整个凭据映射；当前仅支持 field=credentials
+// @Description  清除整个凭据映射；当前仅支持 field=credentials；workload_identity 数据源不支持修改凭据
 // @Tags         数据源
 // @Produce      json
 // @Param        id     path      string  true  "数据源 ID"
@@ -124,6 +129,10 @@ func (h *DataSourceCredentialsHandler) Put(c *gin.Context) {
 func (h *DataSourceCredentialsHandler) DeleteField(c *gin.Context) {
 	ds, ok := h.ownDataSource(c)
 	if !ok {
+		return
+	}
+	if datasource.UsesWorkloadIdentity(ds.Type) {
+		_ = c.Error(errors.NewBadRequestError(datasource.ErrDeploymentManagedCredentials.Error()))
 		return
 	}
 	field := c.Param("field")

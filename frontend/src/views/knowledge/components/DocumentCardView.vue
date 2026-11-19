@@ -155,6 +155,7 @@ const getKnowledgeType = (item: KnowledgeCard) => {
 };
 
 const channelLabelMap: Record<string, string> = {
+  document_service: 'datasource.connector.document_service',
   web: 'knowledgeBase.channelWeb',
   api: 'knowledgeBase.channelApi',
   browser_extension: 'knowledgeBase.channelBrowserExtension',
