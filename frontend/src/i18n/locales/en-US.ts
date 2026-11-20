@@ -8381,8 +8381,8 @@ export default {
     documentService: {
       connectionTitle: 'Connection',
       authenticationManaged: 'Authentication is managed by this deployment. No credentials are needed here.',
-      sourceHint: 'Choose which document sources to sync from the Tranxmart catalog.',
-      selectionRequired: 'Select at least one document source',
+      sourceHint: 'Choose sources, folders or documents for this knowledge base. Folders include all descendants, including future additions. Folders appear once Document Service contains documents inside them.',
+      selectionRequired: 'Select at least one source, folder or document',
       source: {
         manual: 'Uploaded documents',
         github: 'GitHub',

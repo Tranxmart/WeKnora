@@ -1227,8 +1227,8 @@ export default {
     documentService: {
       connectionTitle: '连接',
       authenticationManaged: '身份认证由部署托管，无需在此填写凭证。',
-      sourceHint: '选择要从 Tranxmart 文档目录同步的来源。',
-      selectionRequired: '请至少选择一个文档来源',
+      sourceHint: '为此知识库选择来源、目录或文档。目录包含所有下级内容及今后新增的文档；文档服务中已有文档的目录才会显示。',
+      selectionRequired: '请至少选择一个来源、目录或文档',
       source: {
         manual: '上传文档',
         github: 'GitHub',

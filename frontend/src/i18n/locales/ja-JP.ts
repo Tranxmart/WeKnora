@@ -8381,8 +8381,8 @@ export default {
     documentService: {
       connectionTitle: '接続',
       authenticationManaged: '認証はデプロイ環境で管理されます。ここで認証情報を入力する必要はありません。',
-      sourceHint: 'Tranxmart の文書カタログから同期するソースを選択してください。',
-      selectionRequired: '文書ソースを 1 つ以上選択してください',
+      sourceHint: 'このナレッジベースのソース、フォルダーまたは文書を選択してください。フォルダーには今後追加されるものを含むすべての子孫が含まれます。Document Service に文書があるフォルダーが表示されます。',
+      selectionRequired: 'ソース、フォルダーまたは文書を1つ以上選択してください',
       source: {
         manual: 'アップロード文書',
         github: 'GitHub',

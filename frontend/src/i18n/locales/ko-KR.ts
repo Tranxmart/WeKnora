@@ -1227,8 +1227,8 @@ export default {
     documentService: {
       connectionTitle: '연결',
       authenticationManaged: '인증은 배포 환경에서 관리됩니다. 여기에 자격 증명을 입력할 필요가 없습니다.',
-      sourceHint: 'Tranxmart 문서 카탈로그에서 동기화할 소스를 선택하세요.',
-      selectionRequired: '문서 소스를 하나 이상 선택하세요',
+      sourceHint: '이 지식 베이스에 동기화할 소스, 폴더 또는 문서를 선택하세요. 폴더에는 앞으로 추가될 문서를 포함한 모든 하위 항목이 포함됩니다. Document Service에 문서가 있는 폴더가 표시됩니다.',
+      selectionRequired: '소스, 폴더 또는 문서를 하나 이상 선택하세요',
       source: {
         manual: '업로드 문서',
         github: 'GitHub',

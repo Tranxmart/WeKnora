@@ -42,8 +42,10 @@ func (c *Connector) runSync(
 	if err != nil {
 		return nil, err
 	}
-	r := &syncRun{ctx: ctx, client: client, h: h, cur: cur, sources: sources, limit: utils.GetMaxFileSize(),
-		listed: listedSources(cur.SelectedSourceIDs)}
+	r := &syncRun{
+		ctx: ctx, client: client, h: h, cur: cur, sources: sources, limit: utils.GetMaxFileSize(),
+		listed: listedSources(cur.SelectedSourceIDs),
+	}
 	if r.cur.Phase == phaseScan {
 		if err := r.scan(); err != nil {
 			return nil, r.canceledOr(err)

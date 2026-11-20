@@ -30,6 +30,7 @@ async function fixture({
   type = 'gitlab',
   settings = { projects: [{ project_id: '123', paths: [] }] },
   resources = [],
+  fullTree = false,
   dataSource = null,
 }: {
   configured?: boolean
@@ -37,6 +38,7 @@ async function fixture({
   type?: string
   settings?: Record<string, unknown>
   resources?: any[]
+  fullTree?: boolean
   dataSource?: any
 } = {}) {
   const calls: Array<{ method: string; args: any[] }> = []
@@ -80,7 +82,7 @@ async function fixture({
     // Lazy picker: the first call lists roots, later calls list one level.
     async listResources(id: string, parentId?: string) {
       calls.push({ method: 'listResources', args: [id, parentId] })
-      return { data: resources.filter(r => (parentId ? r.parent_id === parentId : !r.parent_id)) }
+      return { data: fullTree && !parentId ? resources : resources.filter(r => (parentId ? r.parent_id === parentId : !r.parent_id)) }
     },
     async resolveResourceAncestors(id: string, ids: string[]) {
       calls.push({ method: 'resolveResourceAncestors', args: [id, ids] })
@@ -703,5 +705,72 @@ test('Confluence PAT replacement uses the credentials subresource and keeps the 
     const update = f.calls.find(c => c.method === 'updateDataSource')?.args[1]
     assert.deepEqual(update.config.credentials, {})
     assert.equal(update.config.settings.token, undefined)
+  } finally { f.close() }
+})
+
+const githubRepoDirectory = 'path:github:' + Buffer.from(JSON.stringify(['repo:Tranxmart/tranxmart'])).toString('base64url')
+const githubTeamDirectory = 'path:github:' + Buffer.from(JSON.stringify(['repo:Tranxmart/tranxmart', 'docs/team'])).toString('base64url')
+const manualTeamDirectory = 'dir:30000000-0000-4000-8000-000000000001'
+const teamDocument = 'doc:00000000-0000-4000-8000-000000000001'
+const documentDirectoryTree = [
+  { external_id: 'manual', name: 'Manual', type: 'source', has_children: true },
+  { external_id: 'github', name: 'GitHub', type: 'source', has_children: true },
+  { external_id: 'feishu', name: 'Feishu', type: 'source', has_children: false },
+  { external_id: manualTeamDirectory, name: 'Team uploads', type: 'folder', parent_id: 'manual', has_children: true },
+  { external_id: githubRepoDirectory, name: 'Tranxmart/tranxmart', type: 'folder', parent_id: 'github', has_children: true },
+  { external_id: githubTeamDirectory, name: 'Team docs', type: 'folder', parent_id: githubRepoDirectory, has_children: true },
+  { external_id: teamDocument, name: 'Design.md', type: 'document', parent_id: githubTeamDirectory },
+]
+
+test('managed source picker saves team subdirectories across sources with descendant coverage', async () => {
+  const f = await fixture({ create: true, resources: documentDirectoryTree, fullTree: true })
+  try {
+    f.vm.selectType(f.vm.connectorDefs.find((def: any) => def.type === 'document_service'))
+    await f.vm.nextStep()
+    await flush()
+    assert.equal(f.vm.treeFullyLoaded, true)
+    assert.equal(f.vm.resources.length, documentDirectoryTree.length)
+    // Narrow the initial whole-source selection to two team folders.
+    for (const id of ['manual', 'github', 'feishu']) f.vm.toggleResource(id)
+    f.vm.toggleResource(manualTeamDirectory)
+    f.vm.toggleResource(githubTeamDirectory)
+    assert.deepEqual([...f.vm.selectedResourceIds].sort(), [manualTeamDirectory, githubTeamDirectory].sort())
+    assert.equal(f.vm.resourceRowState(teamDocument), 'checked')
+    assert.equal(f.vm.resourceRowState('github'), 'indeterminate')
+    f.vm.toggleExpand(githubRepoDirectory)
+    await flush()
+    assert.equal(f.calls.filter(call => call.method === 'listResources').length, 1)
+    await f.vm.nextStep()
+    await f.vm.handleSubmit()
+    const update = f.calls.find(call => call.method === 'updateDataSource')!
+    assert.deepEqual(update.args[1].config.resource_ids.sort(), [manualTeamDirectory, githubTeamDirectory].sort())
+    assert.equal(update.args[1].knowledge_base_id, 'kb-one')
+    assert.equal(update.args[1].status, 'active')
+  } finally { f.close() }
+})
+
+test('editing a managed team source reveals its nested folder and preserves selection', async () => {
+  const f = await fixture({
+    resources: documentDirectoryTree, fullTree: true,
+    dataSource: {
+      id: 'team-source', name: 'Engineering', type: 'document_service',
+      config: { resource_ids: [githubTeamDirectory], settings: {} },
+      sync_schedule: '0 */5 * * * *', sync_mode: 'incremental',
+      conflict_strategy: 'overwrite', sync_deletions: true,
+    },
+  })
+  try {
+    await f.vm.nextStep()
+    await flush()
+    assert.equal(f.vm.expandedResourceIds.has('github'), true)
+    assert.equal(f.vm.expandedResourceIds.has(githubRepoDirectory), true)
+    assert.equal(f.vm.visibleTree.some((row: any) => row.resource.external_id === githubTeamDirectory), true)
+    assert.equal(f.vm.resourceRowState(githubTeamDirectory), 'checked')
+    assert.equal(f.vm.resourceRowState(teamDocument), 'checked')
+    assert.equal(f.vm.resourceRowState(manualTeamDirectory), 'unchecked')
+    assert.equal(f.calls.some(call => call.method === 'resolveResourceAncestors'), false)
+    await f.vm.handleSubmit()
+    const update = f.calls.find(call => call.method === 'updateDataSource')!
+    assert.deepEqual(update.args[1].config.resource_ids, [githubTeamDirectory])
   } finally { f.close() }
 })
