@@ -70,3 +70,29 @@ func TestFillOmittedIndexingFlagsKeepsDefaults(t *testing.T) {
 	assert.False(t, explicit.IndexingStrategy.VectorEnabled)
 	assert.True(t, explicit.IndexingStrategy.GraphEnabled)
 }
+
+func TestCreateKnowledgeBaseWikiDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		body     string
+		wantWiki bool
+	}{
+		{"omitted strategy", `{"name":"docs"}`, true},
+		{"null strategy", `{"type":"document","indexing_strategy":null}`, true},
+		{"empty strategy", `{"indexing_strategy":{}}`, true},
+		{"partial strategy", `{"indexing_strategy":{"graph_enabled":true}}`, true},
+		{"explicit opt out", `{"indexing_strategy":{"wiki_enabled":false}}`, false},
+		{"FAQ omitted strategy", `{"type":"faq"}`, false},
+		{"FAQ partial strategy", `{"type":"faq","indexing_strategy":{"graph_enabled":true}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var kb types.KnowledgeBase
+			require.NoError(t, json.Unmarshal([]byte(tc.body), &kb))
+			fillOmittedIndexingFlags([]byte(tc.body), &kb)
+			kb.EnsureDefaults()
+			assert.Equal(t, tc.wantWiki, kb.IndexingStrategy.WikiEnabled)
+			assert.True(t, kb.IndexingStrategy.VectorEnabled)
+			assert.True(t, kb.IndexingStrategy.KeywordEnabled)
+		})
+	}
+}

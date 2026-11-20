@@ -158,7 +158,7 @@ graph TB
     EXT --> GN["GraphNode / GraphRelation"]
     IS --> V["vector (默认 true)"]
     IS --> KW["keyword / BM25 (默认 true)"]
-    IS --> WK["wiki (默认 false)"]
+    IS --> WK["wiki (新文档库默认 true)"]
     IS --> GR["graph (默认 false)"]
 ```
 
@@ -184,8 +184,10 @@ graph TB
 | --- | --- | --- |
 | `vector_enabled` | true | 语义向量检索 |
 | `keyword_enabled` | true | 关键词（BM25）检索 |
-| `wiki_enabled` | false | Wiki 页面生成 |
+| `wiki_enabled` | 新文档库 true | Wiki 页面生成；可显式设为 false |
 | `graph_enabled` | false | 知识图谱提取 |
+
+新建文档知识库时，界面默认勾选 Wiki；创建 API 省略整个 `indexing_strategy`、传入 `null`，或只省略其中的 `wiki_enabled` 时也会开启 Wiki。显式传入 `wiki_enabled: false` 可关闭。已有知识库（包括历史空配置）的设置保持不变，FAQ 知识库不默认开启 Wiki。Wiki 的自动生成默认开启，仍需要配置可用的生成模型。
 
 #### 多模态与富化配置 {#_1-5-多模态与富化配置}
 

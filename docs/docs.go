@@ -6223,7 +6223,7 @@ const docTemplate = `{
                     "label_param": "name",
                     "risk": "write"
                 },
-                "x-agent-hint": "Creates a knowledge base owned by the user. Omit type for document. Omit indexing flags for vector and keyword search. Set embedding_model_id and summary_model_id from model.list. vector_store_id can be chosen only now. A field you leave out keeps its default."
+                "x-agent-hint": "Creates a knowledge base owned by the user. Omit type for document. New document bases default to vector search, keyword search and Wiki generation; set indexing_strategy.wiki_enabled=false to opt out. Set embedding_model_id and summary_model_id from model.list. vector_store_id can be chosen only now. A field you leave out keeps its default."
             }
         },
         "/knowledge-bases/copy": {

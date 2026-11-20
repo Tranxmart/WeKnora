@@ -471,7 +471,7 @@ func (h *KnowledgeBaseHandler) HybridSearch(c *gin.Context) {
 // @Security     Bearer
 // @Security     ApiKeyAuth
 // @x-agent      {"id":"knowledge_base.create","risk":"write","label_param":"name"}
-// @x-agent-hint "Creates a knowledge base owned by the user. Omit type for document. Omit indexing flags for vector and keyword search. Set embedding_model_id and summary_model_id from model.list. vector_store_id can be chosen only now. A field you leave out keeps its default."
+// @x-agent-hint "Creates a knowledge base owned by the user. Omit type for document. New document bases default to vector search, keyword search and Wiki generation; set indexing_strategy.wiki_enabled=false to opt out. Set embedding_model_id and summary_model_id from model.list. vector_store_id can be chosen only now. A field you leave out keeps its default."
 // @Router       /knowledge-bases [post]
 func (h *KnowledgeBaseHandler) CreateKnowledgeBase(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -501,7 +501,7 @@ func (h *KnowledgeBaseHandler) CreateKnowledgeBase(c *gin.Context) {
 		return
 	}
 	// A partial indexing_strategy must not turn the omitted pipelines off.
-	// Missing flags keep the defaults: vector and keyword on, wiki and graph off.
+	// New document bases default to vector, keyword and wiki on; graph stays off.
 	fillOmittedIndexingFlags(body, &req)
 	if err := validateExtractConfig(req.ExtractConfig); err != nil {
 		logger.Error(ctx, "Invalid extract configuration", err)
@@ -1214,22 +1214,22 @@ func applyKnowledgeBasePatch(
 	return out, nil
 }
 
-// fillOmittedIndexingFlags keeps DefaultIndexingStrategy for flags the
-// create body did not mention.
+// fillOmittedIndexingFlags applies creation defaults to omitted flags, including
+// an entirely omitted strategy. Keep these separate from the legacy database
+// defaults so reading an existing knowledge base never enables Wiki implicitly.
 func fillOmittedIndexingFlags(raw []byte, kb *types.KnowledgeBase) {
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return
 	}
-	strategyRaw, ok := body["indexing_strategy"]
-	if !ok || len(strategyRaw) == 0 || string(strategyRaw) == "null" {
-		return
-	}
 	var present map[string]json.RawMessage
-	if err := json.Unmarshal(strategyRaw, &present); err != nil {
-		return
+	if strategyRaw, ok := body["indexing_strategy"]; ok {
+		if err := json.Unmarshal(strategyRaw, &present); err != nil {
+			return
+		}
 	}
 	defaults := types.DefaultIndexingStrategy()
+	defaults.WikiEnabled = kb.Type == "" || kb.Type == types.KnowledgeBaseTypeDocument
 	if _, ok := present["vector_enabled"]; !ok {
 		kb.IndexingStrategy.VectorEnabled = defaults.VectorEnabled
 	}
