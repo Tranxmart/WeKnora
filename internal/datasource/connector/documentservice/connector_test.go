@@ -177,7 +177,7 @@ func TestDeploymentClientIsLazyAndCached(t *testing.T) {
 }
 
 func TestResourcesAndConfiguration(t *testing.T) {
-	c := NewConnector()
+	c := NewConnectorWithClient(newFake())
 	resources, err := c.ListResources(context.Background(), config(), "")
 	if err != nil || len(resources) != 3 {
 		t.Fatalf("resources=%v err=%v", resources, err)
@@ -757,7 +757,8 @@ func TestDirectorySelectionFollowsAddsUpdatesMovesAndDeletes(t *testing.T) {
 	moved := inDirs(proto.Clone(inDir).(*txmdocuments.Entry))
 	f.pages[""] = txmdocuments.Page{Documents: []*txmdocuments.Entry{moved, updated, root, other, added}}
 	next, h := syncOnce(t, f, baseline, sel)
-	if !reflect.DeepEqual(ids(h.items), []string{"-1", "2", "5"}) || !mustCursor(t, next).Documents[moved.Document.GetDocumentId()].Excluded {
+	if !reflect.DeepEqual(ids(h.items), []string{"-1", "2", "5"}) ||
+		!mustCursor(t, next).Documents[moved.Document.GetDocumentId()].Excluded {
 		t.Fatalf("items=%v", ids(h.items))
 	}
 

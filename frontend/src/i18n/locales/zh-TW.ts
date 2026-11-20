@@ -1227,8 +1227,8 @@ export default {
     documentService: {
       connectionTitle: '連線',
       authenticationManaged: '身分驗證由部署管理，無須在此填寫憑證。',
-      sourceHint: '選擇要從 Tranxmart 文件目錄同步的來源。',
-      selectionRequired: '請至少選擇一個文件來源',
+      sourceHint: '為此知識庫選擇來源、目錄或文件。目錄包含所有下層內容及日後新增的文件；文件服務中已有文件的目錄才會顯示。',
+      selectionRequired: '請至少選擇一個來源、目錄或文件',
       source: {
         manual: '上傳文件',
         github: 'GitHub',

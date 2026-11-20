@@ -1212,6 +1212,15 @@ async function loadResources() {
         .filter(r => !r.parent_id && r.has_children && parentsWithChildren.has(r.external_id))
         .map(r => r.external_id),
     )
+    // Document Service supplies the full tree. Reveal saved team folders even
+    // when their ancestors start collapsed several levels below a source root.
+    if (form.value.type === 'document_service') {
+      for (const id of selectedResourceIds.value) {
+        for (let parent = parentMap.value.get(id); parent; parent = parentMap.value.get(parent)) {
+          expandedResourceIds.value.add(parent)
+        }
+      }
+    }
     // When editing a lazily-loaded source, reveal pre-existing selections that
     // live below the (not-yet-loaded) tree so they are visible and checked.
     if (isEdit.value && !treeFullyLoaded.value) {

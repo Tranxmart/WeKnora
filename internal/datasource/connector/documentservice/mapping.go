@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/Tencent/WeKnora/internal/datasource"
 	"github.com/Tencent/WeKnora/internal/txmdocuments"
@@ -136,10 +137,14 @@ func mapEntry(entry *txmdocuments.Entry) (mappedEntry, error) {
 		return mappedEntry{}, invalidResponse("invalid canonical source owner")
 	}
 	hierarchy := make([]map[string]interface{}, 0, len(source.GetHierarchyPath()))
+	if len(source.GetHierarchyPath()) > maxHierarchyDepth {
+		return mappedEntry{}, invalidResponse("source hierarchy is too deep")
+	}
 	labels := []string{sourceLabels[idSource]}
 	keys := make(map[string]bool)
 	for _, segment := range source.GetHierarchyPath() {
 		if segment == nil || strings.TrimSpace(segment.GetKey()) == "" ||
+			len(segment.GetKey()) > maxHierarchyKeyBytes || !utf8.ValidString(segment.GetKey()) ||
 			strings.ContainsRune(segment.GetKey(), 0) || keys[segment.GetKey()] ||
 			strings.TrimSpace(segment.GetDisplayName()) == "" ||
 			(int32(segment.GetKind()) != 1 && int32(segment.GetKind()) != 2) {
