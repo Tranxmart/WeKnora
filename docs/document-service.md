@@ -3,6 +3,11 @@
 The `document_service` connector imports retained raw documents into an existing
 **document** knowledge base. Configure the knowledge base and its embedding,
 chat, and any required media models with the normal WeKnora administration UI.
+New document knowledge bases enable Wiki indexing and automatic page generation
+by default, so successfully parsed imports also generate linked Wiki pages when
+the required generation model is configured. An administrator can opt out in the
+knowledge-base settings. Existing knowledge bases retain their saved indexing
+and automatic-generation settings.
 An administrator chooses **Tranxmart Documents**, tests the connection, selects
 Manual, GitHub and/or Feishu, and saves the source. The default is all three
 categories, incremental synchronization every five minutes (`0 */5 * * * *`),

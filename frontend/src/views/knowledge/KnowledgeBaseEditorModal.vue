@@ -1048,7 +1048,7 @@ const initFormData = (type: 'document' | 'faq' = 'document') => {
     indexingStrategy: {
       vectorEnabled: true,
       keywordEnabled: true,
-      wikiEnabled: false,
+      wikiEnabled: true,
       graphEnabled: false,
     },
     // Vector-store binding. Empty string means "use the env-configured
