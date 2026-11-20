@@ -20,6 +20,7 @@ type syncRun struct {
 	h       datasource.StreamHandler
 	cur     cursor
 	sources []txmdocuments.SourceType
+	listed  []string
 	limit   int64
 }
 
@@ -41,7 +42,8 @@ func (c *Connector) runSync(
 	if err != nil {
 		return nil, err
 	}
-	r := &syncRun{ctx: ctx, client: client, h: h, cur: cur, sources: sources, limit: utils.GetMaxFileSize()}
+	r := &syncRun{ctx: ctx, client: client, h: h, cur: cur, sources: sources, limit: utils.GetMaxFileSize(),
+		listed: listedSources(cur.SelectedSourceIDs)}
 	if r.cur.Phase == phaseScan {
 		if err := r.scan(); err != nil {
 			return nil, r.canceledOr(err)
@@ -106,7 +108,7 @@ func (r *syncRun) scan() error {
 			if err != nil {
 				return r.sourceFailure(err)
 			}
-			if !slices.Contains(r.cur.SelectedSourceIDs, mapped.sourceID) {
+			if !slices.Contains(r.listed, mapped.sourceID) {
 				return r.sourceFailure(invalidResponse("document outside selected source filter"))
 			}
 			known, exists := r.cur.Documents[mapped.item.ExternalID]
@@ -117,7 +119,20 @@ func (r *syncRun) scan() error {
 				known.LastSeenGeneration = r.cur.Generation
 				r.cur.Documents[mapped.item.ExternalID] = known
 			}
-			if known.AcceptedFingerprint == mapped.fingerprint &&
+			if !inScope(r.cur.SelectedSourceIDs, mapped, entry.Sources[0].GetHierarchyPath()) {
+				if !exists {
+					continue
+				}
+				// Moved out of the selected directories, or the selection narrowed.
+				// Like tombstones, the deletion is re-emitted on every run.
+				if err := r.h.Emit(r.ctx, deletedItem(mapped.item.ExternalID, known)); err != nil {
+					return err
+				}
+				known.Excluded = true
+				r.cur.Documents[mapped.item.ExternalID] = known
+				continue
+			}
+			if known.AcceptedFingerprint == mapped.fingerprint && !known.Excluded &&
 				(!r.cur.FullScan || known.AcceptedGeneration == r.cur.Generation) {
 				continue
 			}
@@ -154,7 +169,7 @@ func (r *syncRun) scan() error {
 			r.cur.DeletionIDs = make([]string, 0)
 			for id, known := range r.cur.Documents {
 				if known.LastSeenGeneration != r.cur.Generation &&
-					slices.Contains(r.cur.SelectedSourceIDs, known.SourceID) {
+					slices.Contains(r.listed, known.SourceID) {
 					r.cur.DeletionIDs = append(r.cur.DeletionIDs, id)
 				}
 			}
@@ -202,16 +217,8 @@ func (r *syncRun) reconcile() error {
 			if summary.GetAccess() != txmdocuments.AccessReadable || summary.GetStatus() != txmdocuments.StatusDeleted {
 				continue
 			}
-			known := r.cur.Documents[summary.GetDocumentId()]
-			item := types.FetchedItem{
-				ExternalID: summary.GetDocumentId(), Title: known.Title, SourceResourceID: known.SourceID,
-				IsDeleted: true, RetryOnFailure: true,
-				Metadata: map[string]string{
-					"channel": types.ChannelDocumentService, "document_id": summary.GetDocumentId(),
-					"source_type": known.SourceID,
-				},
-			}
-			if err := r.h.Emit(r.ctx, item); err != nil {
+			id := summary.GetDocumentId()
+			if err := r.h.Emit(r.ctx, deletedItem(id, r.cur.Documents[id])); err != nil {
 				return err
 			}
 			// Keep tombstones in inventory. A disabled-deletions handler cannot
@@ -225,4 +232,14 @@ func (r *syncRun) reconcile() error {
 	r.cur.Phase, r.cur.FullScan = phaseCompleted, false
 	r.cur.DeletionIDs, r.cur.DeletionIndex = nil, 0
 	return r.checkpoint()
+}
+
+func deletedItem(id string, known inventoryEntry) types.FetchedItem {
+	return types.FetchedItem{
+		ExternalID: id, Title: known.Title, SourceResourceID: known.SourceID,
+		IsDeleted: true, RetryOnFailure: true,
+		Metadata: map[string]string{
+			"channel": types.ChannelDocumentService, "document_id": id, "source_type": known.SourceID,
+		},
+	}
 }
