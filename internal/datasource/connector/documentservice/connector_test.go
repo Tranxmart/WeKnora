@@ -192,7 +192,8 @@ func TestResourcesAndConfiguration(t *testing.T) {
 		t.Fatalf("children=%v err=%v", children, err)
 	}
 	for _, ds := range []*types.DataSourceConfig{
-		nil, config("unknown"), config("Manual"),
+		nil, config("unknown"), config("Manual"), config("dir:"), config("dir:not-a-uuid"),
+		config("doc:00000000-0000-4000-8000-00000000000A"), config("folder:00000000-0000-4000-8000-000000000001"),
 		{Credentials: map[string]interface{}{"token": ""}},
 		{Settings: map[string]interface{}{"url": "https://elsewhere"}},
 	} {
@@ -203,6 +204,11 @@ func TestResourcesAndConfiguration(t *testing.T) {
 	ids, _, err := parseConfig(config("github", "manual", "github"))
 	if err != nil || !reflect.DeepEqual(ids, []string{"github", "manual"}) {
 		t.Fatalf("ids=%v err=%v", ids, err)
+	}
+	ids, sources, err := parseConfig(config("manual", "doc:"+testDir, "dir:"+testDir))
+	if err != nil || !reflect.DeepEqual(ids, []string{"dir:" + testDir, "doc:" + testDir, "manual"}) ||
+		len(sources) != 3 {
+		t.Fatalf("ids=%v sources=%v err=%v", ids, sources, err)
 	}
 }
 
@@ -691,6 +697,7 @@ func TestCursorRejectsMalformedAndUnknownSchema(t *testing.T) {
 		func(m map[string]interface{}) { m["schemaVersion"] = 2 },
 		func(m map[string]interface{}) { m["phase"] = "other" },
 		func(m map[string]interface{}) { m["selectedSourceIDs"] = []string{"unknown"} },
+		func(m map[string]interface{}) { m["selectedSourceIDs"] = []string{"dir:unknown"} },
 		func(m map[string]interface{}) { m["deletionIndex"] = 2 },
 		func(m map[string]interface{}) {
 			m["documents"] = map[string]interface{}{"invalid": map[string]interface{}{}}
@@ -703,5 +710,82 @@ func TestCursorRejectsMalformedAndUnknownSchema(t *testing.T) {
 		if _, err := decodeCursor(&cursorCopy); !errors.Is(err, datasource.ErrInvalidConfig) {
 			t.Fatal(err)
 		}
+	}
+}
+
+const testDir = "30000000-0000-4000-8000-000000000001"
+
+func inDirs(e *txmdocuments.Entry, keys ...string) *txmdocuments.Entry {
+	e.Sources[0].HierarchyPath = nil
+	for _, key := range keys {
+		e.Sources[0].HierarchyPath = append(e.Sources[0].HierarchyPath, &txmdocuments.HierarchySegment{
+			Key: proto.String(key), DisplayName: proto.String("d-" + key[len(key)-1:]),
+			Kind: models.HierarchySegment_CONTAINER.Enum(),
+		})
+	}
+	return e
+}
+
+func ids(items []types.FetchedItem) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		id := item.ExternalID[len(item.ExternalID)-1:]
+		if item.IsDeleted {
+			id = "-" + id
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
+func TestDirectorySelectionFollowsAddsUpdatesMovesAndDeletes(t *testing.T) {
+	sub := "30000000-0000-4000-8000-000000000002"
+	inDir := inDirs(entryFor(1, txmdocuments.SourceManual), testDir)
+	inSub := inDirs(entryFor(2, txmdocuments.SourceManual), testDir, sub)
+	root := entryFor(3, txmdocuments.SourceManual)
+	other := entryFor(4, txmdocuments.SourceGitHub)
+	f := newFake(inDir, inSub, root, other)
+	sel := "dir:" + testDir
+	baseline, h := syncOnce(t, f, nil, sel)
+	if !reflect.DeepEqual(ids(h.items), []string{"1", "2"}) || len(f.listSources[0]) != 3 {
+		t.Fatalf("items=%v sources=%v", ids(h.items), f.listSources)
+	}
+
+	added := inDirs(entryFor(5, txmdocuments.SourceManual), testDir, sub)
+	updated := proto.Clone(inSub).(*txmdocuments.Entry)
+	updated.CurrentVersion.SourceRevision = proto.String("rev2")
+	moved := inDirs(proto.Clone(inDir).(*txmdocuments.Entry))
+	f.pages[""] = txmdocuments.Page{Documents: []*txmdocuments.Entry{moved, updated, root, other, added}}
+	next, h := syncOnce(t, f, baseline, sel)
+	if !reflect.DeepEqual(ids(h.items), []string{"-1", "2", "5"}) || !mustCursor(t, next).Documents[moved.Document.GetDocumentId()].Excluded {
+		t.Fatalf("items=%v", ids(h.items))
+	}
+
+	f.pages[""] = txmdocuments.Page{Documents: []*txmdocuments.Entry{inDir, root, other, added}}
+	f.summaries[updated.Document.GetDocumentId()] = tombstone(updated)
+	_, h = syncOnce(t, f, next, sel)
+	if !reflect.DeepEqual(ids(h.items), []string{"1", "-2"}) {
+		t.Fatalf("moved back and deleted=%v", ids(h.items))
+	}
+}
+
+func TestDocumentSelectionAndNarrowingFromSource(t *testing.T) {
+	a, b := entryFor(1, txmdocuments.SourceManual), entryFor(2, txmdocuments.SourceFeishu)
+	f := newFake(a)
+	baseline, h := syncOnce(t, f, nil, "manual")
+	if !reflect.DeepEqual(ids(h.items), []string{"1"}) {
+		t.Fatalf("items=%v", ids(h.items))
+	}
+	sel := "doc:" + b.Document.GetDocumentId()
+	f.pages[""] = txmdocuments.Page{Documents: []*txmdocuments.Entry{a, b}}
+	next, h := syncOnce(t, f, baseline, sel)
+	if !reflect.DeepEqual(ids(h.items), []string{"-1", "2"}) {
+		t.Fatalf("narrowed items=%v", ids(h.items))
+	}
+	f.pages[""] = txmdocuments.Page{Documents: []*txmdocuments.Entry{a}}
+	f.summaries[b.Document.GetDocumentId()] = tombstone(b)
+	_, h = syncOnce(t, f, next, sel)
+	if !reflect.DeepEqual(ids(h.items), []string{"-1", "-2"}) {
+		t.Fatalf("deleted items=%v", ids(h.items))
 	}
 }

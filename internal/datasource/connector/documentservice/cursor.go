@@ -25,6 +25,9 @@ type inventoryEntry struct {
 	LastSeenGeneration  uint64 `json:"lastSeenGeneration"`
 	SourceID            string `json:"sourceID"`
 	Title               string `json:"title,omitempty"`
+	// Excluded marks a document seen outside the selection and deleted from the
+	// knowledge base; re-entering the selection ingests it again.
+	Excluded bool `json:"excluded,omitempty"`
 }
 
 // Inventory is only advanced after ingestion accepts an immutable version.
@@ -68,7 +71,7 @@ func decodeCursor(old *types.SyncCursor) (cursor, error) {
 		return cursor{}, invalidCursor()
 	}
 	for i, id := range c.SelectedSourceIDs {
-		if _, ok := sourceTypes[id]; !ok || i > 0 && c.SelectedSourceIDs[i-1] == id {
+		if !validSelection(id) || i > 0 && c.SelectedSourceIDs[i-1] == id {
 			return cursor{}, invalidCursor()
 		}
 	}
@@ -81,10 +84,11 @@ func decodeCursor(old *types.SyncCursor) (cursor, error) {
 			return cursor{}, invalidCursor()
 		}
 	}
+	listed := listedSources(c.SelectedSourceIDs)
 	for i, id := range c.DeletionIDs {
 		known, ok := c.Documents[id]
 		if !ok || i > 0 && c.DeletionIDs[i-1] >= id || known.LastSeenGeneration == c.Generation ||
-			!slices.Contains(c.SelectedSourceIDs, known.SourceID) {
+			!slices.Contains(listed, known.SourceID) {
 			return cursor{}, invalidCursor()
 		}
 	}

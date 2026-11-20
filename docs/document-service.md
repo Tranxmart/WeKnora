@@ -14,6 +14,10 @@ categories, incremental synchronization every five minutes (`0 */5 * * * *`),
 overwrite conflicts and explicit-deletion synchronization. Schedule, pause/resume,
 full synchronization, logs and conflict strategy use the existing controls.
 Category selection filters synchronization; it is not an authorization boundary.
+Through the API, `resource_ids` may also contain `dir:<directory UUID>` (that
+directory and its subdirectories, matched against each document's hierarchy keys)
+and `doc:<document UUID>`; a document is imported when any selection matches.
+Any directory or document selection lists all three categories and filters locally.
 The deployment's service identity reads the corpus allowed by Document Service.
 
 ## Deployment prerequisites
@@ -70,6 +74,8 @@ selected documents again while retaining the previous deletion baseline.
 Imports are removed only after a completed listing and an explicit readable
 `DELETED` result for a known document ID, with deletion synchronization enabled.
 Missing or restricted IDs, failed scans and deselected categories preserve imports.
+A known document listed outside its directory/document selection (moved out, or
+the selection narrowed) is deleted, and re-imported if it moves back.
 Tombstone inventory is retained so enabling deletions later still reconciles it.
 Document Service remains authoritative; WeKnora stores managed ingestion copies.
 Replacement uses the existing asynchronous parser and temporarily removes old
