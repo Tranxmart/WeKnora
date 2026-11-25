@@ -15,6 +15,7 @@ import (
 
 const publishedWikiPageSize = 20
 
+// ListPublishedEntries lists child folders and published articles in a wiki folder.
 func (h *WikiPageHandler) ListPublishedEntries(c *gin.Context) {
 	kbID, offset, ok := h.publishedWikiPage(c)
 	if !ok {
@@ -25,7 +26,9 @@ func (h *WikiPageHandler) ListPublishedEntries(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	entries, err := h.wikiService.ListPublishedWikiEntries(c.Request.Context(), kbID, folderID, offset, publishedWikiPageSize+1)
+	entries, err := h.wikiService.ListPublishedWikiEntries(
+		c.Request.Context(), kbID, folderID, offset, publishedWikiPageSize+1,
+	)
 	if err != nil {
 		writePublishedWikiError(c, err)
 		return
@@ -38,6 +41,7 @@ func (h *WikiPageHandler) ListPublishedEntries(c *gin.Context) {
 	})
 }
 
+// SearchPublished returns metadata for published wiki articles that match the query.
 func (h *WikiPageHandler) SearchPublished(c *gin.Context) {
 	kbID, offset, ok := h.publishedWikiPage(c)
 	if !ok {
@@ -50,7 +54,9 @@ func (h *WikiPageHandler) SearchPublished(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	hits, err := h.wikiService.SearchPublishedWiki(c.Request.Context(), kbID, query, pageType, offset, publishedWikiPageSize+1)
+	hits, err := h.wikiService.SearchPublishedWiki(
+		c.Request.Context(), kbID, query, pageType, offset, publishedWikiPageSize+1,
+	)
 	if err != nil {
 		writePublishedWikiError(c, err)
 		return
@@ -60,6 +66,7 @@ func (h *WikiPageHandler) SearchPublished(c *gin.Context) {
 	})
 }
 
+// GetPublishedRevision serves the requested revision as Markdown and checks its availability on HEAD.
 func (h *WikiPageHandler) GetPublishedRevision(c *gin.Context) {
 	kbID, _, err := h.validateWikiKB(c)
 	if err != nil {
@@ -73,7 +80,9 @@ func (h *WikiPageHandler) GetPublishedRevision(c *gin.Context) {
 		return
 	}
 	withContent := c.Request.Method == http.MethodGet
-	markdown, err := h.wikiService.PublishedWikiRevision(c.Request.Context(), kbID, articleID, int(revision), withContent)
+	markdown, err := h.wikiService.PublishedWikiRevision(
+		c.Request.Context(), kbID, articleID, int(revision), withContent,
+	)
 	if err != nil {
 		writePublishedWikiError(c, err)
 		return

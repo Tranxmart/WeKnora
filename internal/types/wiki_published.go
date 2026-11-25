@@ -9,12 +9,14 @@ type PublishedWikiArticle struct {
 	Version  int    `json:"revision"`
 }
 
+// PublishedWikiFolder describes a folder in a published wiki listing.
 type PublishedWikiFolder struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	HasChildren bool   `json:"has_children"`
 }
 
+// PublishedWikiEntries holds a page of child folders and published articles.
 type PublishedWikiEntries struct {
 	Folders  []PublishedWikiFolder  `json:"folders"`
 	Articles []PublishedWikiArticle `json:"articles"`

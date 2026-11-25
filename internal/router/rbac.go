@@ -378,6 +378,10 @@ func (a *apiKeyRouteGroup) GET(rel string, h ...gin.HandlerFunc) gin.IRoutes {
 	return a.handle(http.MethodGet, rel, h...)
 }
 
+func (a *apiKeyRouteGroup) HEAD(rel string, h ...gin.HandlerFunc) gin.IRoutes {
+	return a.handle(http.MethodHead, rel, h...)
+}
+
 func (a *apiKeyRouteGroup) POST(rel string, h ...gin.HandlerFunc) gin.IRoutes {
 	return a.handle(http.MethodPost, rel, h...)
 }

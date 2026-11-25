@@ -666,7 +666,8 @@ func (t *SearchKnowledgeTool) concurrentSearchByTargets(
 		mu.Lock()
 		defer mu.Unlock()
 		for _, r := range rows {
-			if t.sourceDocumentsOnly && (r.ChunkType == string(types.ChunkTypeWikiPage) || strings.HasPrefix(r.ID, "wp-")) {
+			if t.sourceDocumentsOnly &&
+				(r.ChunkType == string(types.ChunkTypeWikiPage) || strings.HasPrefix(r.ID, "wp-")) {
 				continue
 			}
 			allResults = append(allResults, &searchResultWithMeta{

@@ -10,8 +10,12 @@ import (
 // Provides high-level operations for wiki page CRUD, link management,
 // and chunk synchronization.
 type WikiPageService interface {
-	ListPublishedWikiEntries(ctx context.Context, kbID, folderID string, offset, limit int) (types.PublishedWikiEntries, error)
-	SearchPublishedWiki(ctx context.Context, kbID, query, pageType string, offset, limit int) ([]types.PublishedWikiArticle, error)
+	ListPublishedWikiEntries(
+		ctx context.Context, kbID, folderID string, offset, limit int,
+	) (types.PublishedWikiEntries, error)
+	SearchPublishedWiki(
+		ctx context.Context, kbID, query, pageType string, offset, limit int,
+	) ([]types.PublishedWikiArticle, error)
 	PublishedWikiRevision(ctx context.Context, kbID, pageID string, version int, withContent bool) (string, error)
 	// CreatePage creates a new wiki page, parses outbound links, updates
 	// bidirectional link references, and syncs to chunks for retrieval.
@@ -255,8 +259,12 @@ type WikiPageService interface {
 
 // WikiPageRepository defines the wiki page data persistence interface.
 type WikiPageRepository interface {
-	ListPublishedWikiEntries(ctx context.Context, kbID, folderID string, offset, limit int) (types.PublishedWikiEntries, error)
-	SearchPublishedWiki(ctx context.Context, kbID, query, pageType string, offset, limit int) ([]types.PublishedWikiArticle, error)
+	ListPublishedWikiEntries(
+		ctx context.Context, kbID, folderID string, offset, limit int,
+	) (types.PublishedWikiEntries, error)
+	SearchPublishedWiki(
+		ctx context.Context, kbID, query, pageType string, offset, limit int,
+	) ([]types.PublishedWikiArticle, error)
 	PublishedWikiRevision(ctx context.Context, kbID, pageID string, version int, withContent bool) (string, error)
 	// Create inserts a new wiki page record.
 	Create(ctx context.Context, page *types.WikiPage) error

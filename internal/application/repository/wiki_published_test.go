@@ -19,7 +19,10 @@ func TestPublishedWikiRevision(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, page))
 	for _, rev := range []types.WikiPageRevision{
 		{ID: uuid.NewString(), PageID: page.ID, KnowledgeBaseID: "base", Version: 1, Status: "draft", Content: "Draft"},
-		{ID: uuid.NewString(), PageID: page.ID, KnowledgeBaseID: "base", Version: 2, Status: "published", Content: "# Prior\n"},
+		{
+			ID: uuid.NewString(), PageID: page.ID, KnowledgeBaseID: "base",
+			Version: 2, Status: "published", Content: "# Prior\n",
+		},
 	} {
 		require.NoError(t, db.Create(&rev).Error)
 	}
@@ -51,11 +54,14 @@ func TestPublishedWikiEntriesAndSearch(t *testing.T) {
 	ctx := t.Context()
 	repo := NewWikiPageRepository(db)
 	folder := &types.WikiFolder{ID: uuid.NewString(), KnowledgeBaseID: "base", Name: "Lenses", Path: "Lenses"}
-	child := &types.WikiFolder{ID: uuid.NewString(), KnowledgeBaseID: "base", Name: "Prime", ParentID: folder.ID, Path: "Lenses/Prime"}
+	child := &types.WikiFolder{
+		ID: uuid.NewString(), KnowledgeBaseID: "base", Name: "Prime", ParentID: folder.ID, Path: "Lenses/Prime",
+	}
 	require.NoError(t, db.Create(folder).Error)
 	require.NoError(t, db.Create(child).Error)
 	for i := range 24 {
-		page := makeWikiPage("base", fmt.Sprintf("concept/camera-%02d", i), types.WikiPageTypeConcept, types.WikiPageStatusPublished)
+		slug := fmt.Sprintf("concept/camera-%02d", i)
+		page := makeWikiPage("base", slug, types.WikiPageTypeConcept, types.WikiPageStatusPublished)
 		page.Content = "body-only punct.il"
 		require.NoError(t, repo.Create(ctx, page))
 	}
@@ -66,7 +72,9 @@ func TestPublishedWikiEntriesAndSearch(t *testing.T) {
 
 	entries, err := repo.ListPublishedWikiEntries(ctx, "base", "", 0, 20)
 	require.NoError(t, err)
-	require.Equal(t, []types.PublishedWikiFolder{{ID: folder.ID, Name: folder.Name, HasChildren: true}}, entries.Folders)
+	require.Equal(t, []types.PublishedWikiFolder{
+		{ID: folder.ID, Name: folder.Name, HasChildren: true},
+	}, entries.Folders)
 	require.Len(t, entries.Articles, 19)
 	second, err := repo.ListPublishedWikiEntries(ctx, "base", "", 20, 20)
 	require.NoError(t, err)

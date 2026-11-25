@@ -50,7 +50,9 @@ func (r *wikiPageRepository) ListPublishedWikiEntries(
 	return entries, err
 }
 
-func (r *wikiPageRepository) SearchPublishedWiki(ctx context.Context, kbID, query, pageType string, offset, limit int) ([]types.PublishedWikiArticle, error) {
+func (r *wikiPageRepository) SearchPublishedWiki(
+	ctx context.Context, kbID, query, pageType string, offset, limit int,
+) ([]types.PublishedWikiArticle, error) {
 	query = r.literalWikiSearchQuery(query)
 	db := r.rankedWikiSearch(ctx, []string{kbID}, query, publishedWikiMetadata).
 		Where("status = ?", types.WikiPageStatusPublished)
