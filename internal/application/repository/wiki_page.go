@@ -1464,10 +1464,14 @@ func (r *wikiPageRepository) Search(
 func (r *wikiPageRepository) SearchLiteral(
 	ctx context.Context, kbID, query string, limit int,
 ) ([]*types.WikiPage, error) {
-	if r.wikiDialect() != "sqlite" {
-		query = regexp.QuoteMeta(query)
+	return r.Search(ctx, kbID, r.literalWikiSearchQuery(query), limit)
+}
+
+func (r *wikiPageRepository) literalWikiSearchQuery(query string) string {
+	if r.wikiDialect() == "sqlite" {
+		return query
 	}
-	return r.Search(ctx, kbID, query, limit)
+	return regexp.QuoteMeta(query)
 }
 
 func wikiSearchPredicate(column, op string, withEscape bool) string {
@@ -1518,33 +1522,9 @@ func (r *wikiPageRepository) SearchAcross(
 		limit = 50
 	}
 
-	op, withEscape := r.wikiSearchMatchOp()
-	pattern := query
-	if withEscape {
-		pattern = "%" + escapeLikePattern(query) + "%"
-	}
-	pred := func(column string) string {
-		return wikiSearchPredicate(column, op, withEscape)
-	}
-	rankExpr := "CASE " +
-		"WHEN " + pred("title") + " THEN 4 " +
-		"WHEN " + pred("slug") + " THEN 3 " +
-		"WHEN " + pred("summary") + " THEN 2 " +
-		"WHEN " + pred("content") + " THEN 1 " +
-		"ELSE 0 END AS match_rank"
-	matchClause := "(" + pred("title") + " OR " + pred("content") +
-		" OR " + pred("summary") + " OR " + pred("slug") + ")"
-	matchArgs := wikiSearchMatchArgs(pattern, likeEscapeChar, withEscape, 4)
-	whereArgs := make([]interface{}, 0, 1+len(matchArgs))
-	whereArgs = append(whereArgs, kbIDs)
-	whereArgs = append(whereArgs, matchArgs...)
-
 	var pages []*types.WikiPage
-	if err := r.db.WithContext(ctx).
-		Select("*, "+rankExpr, matchArgs...).
-		Where("knowledge_base_id IN ? AND "+matchClause, whereArgs...).
-		Where("status != ?", "archived").
-		Order("match_rank DESC, updated_at DESC").
+	if err := r.rankedWikiSearch(ctx, kbIDs, query, "*").
+		Where("status != ?", types.WikiPageStatusArchived).
 		Limit(limit).
 		Find(&pages).Error; err != nil {
 		return nil, err

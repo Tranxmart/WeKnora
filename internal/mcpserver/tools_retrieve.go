@@ -196,7 +196,7 @@ func (s *Server) runSearchKnowledgeWithFilter(
 ) (*mcp.CallToolResult, error) {
 	tool := tools.NewSearchKnowledgeTool(
 		s.kbService, s.knowledgeService, s.chunkService, targets, nil, s.cfg,
-	)
+	).WithSourceDocumentsOnly()
 	if pattern != nil {
 		tool.WithPatternFilter(pattern)
 	}

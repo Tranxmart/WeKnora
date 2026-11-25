@@ -171,6 +171,12 @@ migration `000061_wiki_page_hierarchy.up.sql` 引入独立的 `wiki_folders` 表
 
 所有 Wiki 路由挂在 `/api/v1/knowledgebase/:kb_id/wiki` 之下（`internal/router/routes_knowledge.go`），**没有免登录的公开访问模式**，读写均受 RBAC 与 KB 访问控制约束：
 
+发布文章的集成接口使用同一知识库的读权限。 `GET /published-entries` 和
+`GET /published-search` 每页返回最多 20 条已发布文章的元数据，支持 `offset`。
+`HEAD /published-revisions/:article_id/:revision` 验证指定版本可读；
+`GET` 返回该版本的 Markdown。当前页面与所选版本都必须处于已发布状态。
+历史版本沿用 Wiki 的快照保留策略。
+
 #### 读接口（Viewer + KBAccessRead）
 
 | 方法 | 路径 | 说明 |
