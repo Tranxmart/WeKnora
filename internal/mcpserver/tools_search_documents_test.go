@@ -336,3 +336,30 @@ func TestMCPSearchKnowledgeDocumentScopeSizeLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPDocumentSearchKeepsWikiChunksOut(t *testing.T) {
+	_, r, kbService, _ := newDocumentSearchFixture(t)
+	kbService.rows = append(kbService.rows,
+		&types.SearchResult{
+			ID: "generated-wiki", KnowledgeID: "doc-a", KnowledgeBaseID: "kb-own", Score: 0.99,
+			ChunkType: string(types.ChunkTypeWikiPage), Content: "contract wiki-sensitive-content",
+		},
+		&types.SearchResult{
+			ID: "wp-legacy", KnowledgeID: "doc-a", KnowledgeBaseID: "kb-own", Score: 0.99,
+			ChunkType: string(types.ChunkTypeText), Content: "contract legacy-wiki-sensitive-content",
+		},
+	)
+	for _, tool := range []string{types.MCPEndpointToolSearchKnowledge, types.MCPEndpointToolGrepChunks} {
+		response := rpc(t, r, "tools/call", map[string]any{
+			"name": tool,
+			"arguments": map[string]any{
+				"query": "contract", "knowledge_base_ids": []string{"Own"},
+				"limit": 10,
+			},
+		})
+		raw, err := json.Marshal(response)
+		require.NoError(t, err)
+		require.Contains(t, string(raw), "doc-b contract price")
+		require.NotContains(t, string(raw), "wiki-sensitive-content")
+	}
+}

@@ -118,7 +118,8 @@ type SearchKnowledgeTool struct {
 	// patternFilter, when set, keeps only results whose text matches it.
 	// It is not exposed to the model; the MCP grep_chunks endpoint uses it
 	// to keep grep semantics on top of index-backed retrieval.
-	patternFilter *regexp.Regexp
+	patternFilter       *regexp.Regexp
+	sourceDocumentsOnly bool
 	// contextImages attaches the images of results found by an image's own
 	// vector, for a model that can see them; see WithContextImages.
 	contextImages bool
@@ -138,6 +139,12 @@ func (t *SearchKnowledgeTool) WithContextImages(enabled bool) *SearchKnowledgeTo
 // candidate pool is widened to the maximum limit before filtering.
 func (t *SearchKnowledgeTool) WithPatternFilter(re *regexp.Regexp) *SearchKnowledgeTool {
 	t.patternFilter = re
+	return t
+}
+
+// WithSourceDocumentsOnly excludes wiki-derived chunks from document retrieval.
+func (t *SearchKnowledgeTool) WithSourceDocumentsOnly() *SearchKnowledgeTool {
+	t.sourceDocumentsOnly = true
 	return t
 }
 
@@ -659,6 +666,9 @@ func (t *SearchKnowledgeTool) concurrentSearchByTargets(
 		mu.Lock()
 		defer mu.Unlock()
 		for _, r := range rows {
+			if t.sourceDocumentsOnly && (r.ChunkType == string(types.ChunkTypeWikiPage) || strings.HasPrefix(r.ID, "wp-")) {
+				continue
+			}
 			allResults = append(allResults, &searchResultWithMeta{
 				SearchResult:      r,
 				SourceQuery:       query,

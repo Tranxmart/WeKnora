@@ -355,6 +355,10 @@ func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHan
 	wikiRead := wiki.With(apiKeyRetrieve(apiKeyFullAccess()))
 	{
 		// Page CRUD
+		wikiRead.GET("/published-entries", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPublishedEntries)
+		wikiRead.GET("/published-search", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.SearchPublished)
+		wikiRead.HEAD("/published-revisions/:article_id/:revision", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetPublishedRevision)
+		wikiRead.GET("/published-revisions/:article_id/:revision", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetPublishedRevision)
 		wikiRead.GET("/pages", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPages)
 		wiki.POST("/pages", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)
 		wiki.PUT("/move-page", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.MovePage)
